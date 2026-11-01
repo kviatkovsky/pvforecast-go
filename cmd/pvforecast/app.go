@@ -66,7 +66,7 @@ func newFlagSet(o *options, stderr io.Writer) *flag.FlagSet {
 	fs.StringVar(&o.model, "model", "perez", "sky diffuse model: perez, haydavies or isotropic")
 	fs.StringVar(&o.solarPos, "solarpos", "spa", "solar position algorithm: spa or noaa")
 	fs.Float64Var(&o.losses, "losses", round(power.DefaultLosses.TotalPct(), 2),
-		"total system losses in percent (default: PVWatts loss breakdown)")
+		"total system losses in percent; if unset, the PVWatts loss categories are used")
 	fs.Float64Var(&o.dcac, "dcac", 1.1, "DC/AC ratio: kWp divided by the inverter AC rating")
 	fs.StringVar(&o.config, "config", "", "JSON system configuration file (multi-array systems)")
 	fs.StringVar(&o.format, "format", "table", "output format: table, json or csv")
