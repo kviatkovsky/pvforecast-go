@@ -12,9 +12,10 @@ import (
 // DefaultAlbedo is the ground reflectance used when System.Albedo is zero.
 const DefaultAlbedo = 0.25
 
-// DefaultThermal is the cell temperature model used when Array.Thermal is
-// nil (see ADR 0005).
-var DefaultThermal thermal.Model = thermal.SAPMOpenRackGlassPolymer
+// defaultThermal is the cell temperature model used when Array.Thermal is
+// nil (see ADR 0005). It is not exported so that Compute depends on no
+// mutable package state.
+var defaultThermal thermal.Model = thermal.SAPMOpenRackGlassPolymer
 
 // ErrInvalidSystem is wrapped by every error that System.Validate returns.
 var ErrInvalidSystem = errors.New("forecast: invalid system")
@@ -42,7 +43,8 @@ type Array struct {
 	// GammaPdc is the temperature coefficient of power, 1/°C. Zero selects
 	// power.DefaultGammaPdc (−0.004).
 	GammaPdc float64
-	// Thermal is the cell temperature model. Nil selects DefaultThermal.
+	// Thermal is the cell temperature model. Nil selects
+	// thermal.SAPMOpenRackGlassPolymer.
 	Thermal thermal.Model
 	// IAM is the incidence angle modifier for beam irradiance. Nil selects
 	// power.DefaultPhysicalIAM.
@@ -148,7 +150,7 @@ func (s System) resolve() []resolved {
 			r.gamma = power.DefaultGammaPdc
 		}
 		if r.thermal == nil {
-			r.thermal = DefaultThermal
+			r.thermal = defaultThermal
 		}
 		if r.iam == nil {
 			r.iam = power.DefaultPhysicalIAM

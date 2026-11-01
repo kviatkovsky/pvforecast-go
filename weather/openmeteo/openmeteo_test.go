@@ -352,3 +352,40 @@ func TestAPIErrorMessage(t *testing.T) {
 		}
 	}
 }
+
+// TestBackoffDoesNotOverflow guards against the doubling overflowing into a
+// zero wait, which would hammer the API after about 35 attempts.
+func TestBackoffDoesNotOverflow(t *testing.T) {
+	t.Parallel()
+	synctest.Test(t, func(t *testing.T) {
+		const retries = 60
+		var calls []time.Time
+		c := newClient(func(*http.Request) (*http.Response, error) {
+			calls = append(calls, time.Now())
+			return respond(http.StatusServiceUnavailable, ""), nil
+		}, openmeteo.WithRetry(retries, time.Second))
+		if _, err := c.Forecast(t.Context(), krakowRequest(1)); !errors.Is(err, weather.ErrUpstream) {
+			t.Fatalf("err = %v", err)
+		}
+		if len(calls) != retries+1 {
+			t.Fatalf("calls = %d, want %d", len(calls), retries+1)
+		}
+		// Once the backoff reaches the 10 s cap, each wait is at least half
+		// of it, however many attempts came before.
+		for i := 6; i < len(calls); i++ {
+			if gap := calls[i].Sub(calls[i-1]); gap < 5*time.Second {
+				t.Fatalf("wait before attempt %d was %v, want at least 5s", i, gap)
+			}
+		}
+	})
+}
+
+func TestNilHTTPClientKeepsDefault(t *testing.T) {
+	t.Parallel()
+	c := openmeteo.New(openmeteo.WithHTTPClient(nil), openmeteo.WithBaseURL("http://127.0.0.1:0"),
+		openmeteo.WithRetry(0, 0), openmeteo.WithClock(fixtureNow))
+	// Must fail with a transport error, not panic on a nil client.
+	if _, err := c.Forecast(t.Context(), krakowRequest(1)); !errors.Is(err, weather.ErrUpstream) {
+		t.Errorf("err = %v, want ErrUpstream", err)
+	}
+}
