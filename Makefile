@@ -19,9 +19,11 @@ OPENMETEO_URL   := https://api.open-meteo.com/v1/forecast?latitude=50.0647&longi
 help: ## Show this help.
 	@awk 'BEGIN {FS = ":.*##"} /^[a-zA-Z_-]+:.*##/ {printf "  \033[36m%-10s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
+VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
+
 .PHONY: build
-build: ## Compile all packages.
-	$(GO) build $(PKGS)
+build: ## Build bin/pvforecast with the version stamped in.
+	$(GO) build -trimpath -ldflags '-s -w -X main.version=$(VERSION)' -o bin/pvforecast ./cmd/pvforecast
 
 .PHONY: test
 test: ## Run unit tests.

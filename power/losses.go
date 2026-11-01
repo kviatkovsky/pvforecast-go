@@ -16,19 +16,19 @@ var ErrInvalidParameters = errors.New("power: invalid parameters")
 // They combine multiplicatively, so 2 % soiling and 3 % shading remove
 // 1 − 0.98·0.97 = 4.94 %, not 5 %.
 type Losses struct {
-	Soiling      float64
-	Shading      float64
-	Snow         float64
-	Mismatch     float64
-	Wiring       float64
-	Connections  float64
-	LID          float64 // light-induced degradation
-	Nameplate    float64 // nameplate rating tolerance
-	Age          float64
-	Availability float64
+	Soiling      float64 `json:"soiling"`
+	Shading      float64 `json:"shading"`
+	Snow         float64 `json:"snow"`
+	Mismatch     float64 `json:"mismatch"`
+	Wiring       float64 `json:"wiring"`
+	Connections  float64 `json:"connections"`
+	LID          float64 `json:"lid"`       // light-induced degradation
+	Nameplate    float64 `json:"nameplate"` // nameplate rating tolerance
+	Age          float64 `json:"age"`
+	Availability float64 `json:"availability"`
 	// Other is any loss outside the PVWatts categories, or the single total
 	// when no breakdown is known (set the other fields to zero).
-	Other float64
+	Other float64 `json:"other"`
 }
 
 // DefaultLosses are the PVWatts default losses, 14.08 % in total.

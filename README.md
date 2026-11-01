@@ -17,6 +17,60 @@ library has no dependencies outside the Go standard library.
 > **Status:** under active development towards v0.1.0. The API is not stable
 > yet.
 
+## Install
+
+```bash
+go install github.com/kviatkovsky/pvforecast-go/cmd/pvforecast@latest
+```
+
+## Command line
+
+```bash
+pvforecast --lat 50.06 --lon 19.94 --kwp 10 --tilt 35 --azimuth 180 --days 2 --tz Europe/Warsaw
+```
+
+```text
+PV system · 50.0600, 19.9400 · 10.0 kWp in 1 array(s) · inverter 9.09 kW · losses 14.1 %
+Weather: open-meteo, interval-end · sky model: perez · times in Europe/Warsaw
+
+                  PERIOD  POA W/m²  CELL °C  DC kW  AC kW
+  2026-06-20 11:00–12:00       997     47.0   7.81   7.51
+  2026-06-20 12:00–13:00      1043     49.5   8.08   7.77
+  ...
+
+        DATE  ENERGY kWh  kWh/kWp
+  2026-06-20        64.7     6.47
+  2026-06-21        64.7     6.47
+       TOTAL       129.4    12.94
+```
+
+(Excerpt of the clear-sky test fixture; real output depends on the weather.)
+
+Multi-array systems are described in JSON, see
+[`examples/system.json`](examples/system.json):
+
+```bash
+pvforecast --config examples/system.json --format json
+```
+
+| Flag | Default | Meaning |
+|---|---|---|
+| `--lat`, `--lon`, `--altitude` | — | site, degrees and meters |
+| `--kwp`, `--tilt`, `--azimuth` | —, 35, 180 | single array; azimuth clockwise from north |
+| `--days` | 2 | local calendar days including today, 1–7 |
+| `--model` | `perez` | `perez`, `haydavies` or `isotropic` |
+| `--solarpos` | `spa` | `spa` or `noaa` |
+| `--losses` | 14.08 | total system losses, % |
+| `--dcac` | 1.1 | DC/AC ratio, sets the inverter rating |
+| `--config` | — | JSON system file (replaces the system flags) |
+| `--format` | `table` | `table`, `json` or `csv` |
+| `--tz` | `Local` | IANA time zone for display and daily totals |
+| `--instant` | false | use instantaneous instead of hourly-mean irradiance |
+| `--log-level` | `warn` | `debug`, `info`, `warn`, `error` (to stderr) |
+
+Exit codes: 0 success, 1 runtime error (for example, the weather service is
+unreachable), 2 usage error. `pvforecast version` prints the version.
+
 ## Roadmap to v0.1.0
 
 - [x] Repository skeleton, CI, lint and supply-chain tooling
@@ -26,7 +80,7 @@ library has no dependencies outside the Go standard library.
 - [x] `power`: PVWatts v5 DC, losses, inverter and clipping
 - [x] `weather/openmeteo`: Open-Meteo forecast provider
 - [x] `forecast`: pipeline, multi-array systems, interval conventions
-- [ ] `pvforecast` CLI with table, JSON and CSV output
+- [x] `pvforecast` CLI with table, JSON and CSV output
 - [ ] Validation against PVGIS and Open-Meteo GTI
 - [ ] Signed release binaries
 
