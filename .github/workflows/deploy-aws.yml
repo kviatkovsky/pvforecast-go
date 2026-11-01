@@ -1,0 +1,58 @@
+name: Deploy to AWS Lambda
+
+# Disabled until the repository variables AWS_DEPLOY_ROLE_ARN,
+# AWS_LAMBDA_FUNCTION and AWS_REGION are set (see deploy/aws/README.md).
+# No AWS keys are stored: the job assumes a role through GitHub OIDC.
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-aws
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: vars.AWS_DEPLOY_ROLE_ARN != ''
+    runs-on: ubuntu-latest
+    environment: production
+    permissions:
+      contents: read
+      id-token: write # request the OIDC token for AWS
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.mod
+
+      - name: Build the Lambda package
+        run: make lambda-zip VERSION="${GITHUB_REF_NAME}"
+
+      - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Update function code
+        env:
+          FUNCTION: ${{ vars.AWS_LAMBDA_FUNCTION }}
+        run: |
+          aws lambda update-function-code --function-name "$FUNCTION" \
+            --zip-file fileb://deploy/aws/build/bootstrap.zip --query LastUpdateStatus --output text
+          aws lambda wait function-updated-v2 --function-name "$FUNCTION"
+
+      - name: Smoke test
+        env:
+          FUNCTION: ${{ vars.AWS_LAMBDA_FUNCTION }}
+        run: |
+          url=$(aws lambda get-function-url-config --function-name "$FUNCTION" --query FunctionUrl --output text)
+          curl -fsS --retry 5 --retry-all-errors "${url}healthz"
+          curl -fsS "${url}version"

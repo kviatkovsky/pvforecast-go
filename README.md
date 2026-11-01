@@ -131,6 +131,9 @@ Operational behavior (see [ADR 0007](docs/adr/0007-http-api.md)):
   or curl), read-only root filesystem in `compose.yaml`; images for
   linux/amd64 and linux/arm64 carry an SBOM attestation and a keyless
   cosign signature (`cosign verify` command in each release).
+- Deployable to AWS Lambda behind a public Function URL with the included
+  Terraform module: arm64, no stored credentials, GitHub OIDC deploys,
+  ≈ 0 PLN/month on the free tier. See [deploy/aws](deploy/aws/README.md).
 - Configuration through environment variables: `PORT`, `LOG_LEVEL`,
   `LOG_FORMAT`, `CACHE_TTL`, `CACHE_SIZE`, `MAX_IN_FLIGHT`,
   `REQUEST_TIMEOUT`, `OPENMETEO_URL`.
@@ -337,7 +340,6 @@ Run them with `make bench`; compare commits with
 - Bifacial irradiance (view-factor model)
 - DIRINT decomposition
 - More providers: Solcast, ECMWF open data
-- AWS Lambda deployment of the HTTP API (Terraform)
 - WebAssembly demo on GitHub Pages
 
 ## Contributing
