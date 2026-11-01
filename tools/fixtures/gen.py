@@ -198,6 +198,28 @@ def erbs(out: Path) -> int:
     return rows
 
 
+def thermal(out: Path) -> int:
+    poas = [0.0, 50.0, 200.0, 500.0, 800.0, 1000.0, 1200.0]
+    temps = [-20.0, 0.0, 15.0, 30.0, 45.0]
+    winds = [0.0, 0.5, 2.0, 5.0, 10.0, 20.0]
+    sapm = pvlib.temperature.TEMPERATURE_MODEL_PARAMETERS["sapm"]
+    rows = 0
+    with out.open("w", newline="") as f:
+        w = csv.writer(f, lineterminator="\n")
+        w.writerow(["model", "poa", "temp_air", "wind", "cell_temp"])
+        for e in poas:
+            for ta in temps:
+                for ws in winds:
+                    tc = pvlib.temperature.faiman(e, ta, ws, u0=25.0, u1=6.84)
+                    w.writerow(["faiman", e, ta, ws, _fmt(float(tc))])
+                    rows += 1
+                    for name, p in sapm.items():
+                        tc = pvlib.temperature.sapm_cell(e, ta, ws, **p)
+                        w.writerow([f"sapm_{name}", e, ta, ws, _fmt(float(tc))])
+                        rows += 1
+    return rows
+
+
 def main() -> None:
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--out", type=Path, default=Path("internal/testdata"))
@@ -208,6 +230,7 @@ def main() -> None:
     print(f"  irradiance_transposition.csv: {transposition(args.out / 'irradiance_transposition.csv')} rows")
     print(f"  irradiance_airmass.csv:     {airmass(args.out / 'irradiance_airmass.csv')} rows")
     print(f"  irradiance_erbs.csv:        {erbs(args.out / 'irradiance_erbs.csv')} rows")
+    print(f"  thermal.csv:                {thermal(args.out / 'thermal.csv')} rows")
 
 
 if __name__ == "__main__":
