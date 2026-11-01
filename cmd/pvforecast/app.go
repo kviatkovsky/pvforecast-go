@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/kviatkovsky/pvforecast-go/forecast"
+	"github.com/kviatkovsky/pvforecast-go/internal/config"
 	"github.com/kviatkovsky/pvforecast-go/irradiance"
 	"github.com/kviatkovsky/pvforecast-go/power"
 	"github.com/kviatkovsky/pvforecast-go/solarpos"
@@ -163,14 +164,14 @@ func buildSystem(o options) (forecast.System, irradiance.Model, error) {
 				return forecast.System{}, 0, usagef("--%s cannot be combined with --config; set it in the file", name)
 			}
 		}
-		cfg, err := loadConfig(o.config)
+		cfg, err := config.Load(o.config)
 		if err != nil {
 			return forecast.System{}, 0, usageError{err}
 		}
 		if cfg.Model != nil && !o.set["model"] {
 			model = *cfg.Model
 		}
-		sys, err := cfg.system(o.dcac)
+		sys, err := cfg.Build(o.dcac)
 		if err != nil {
 			return forecast.System{}, 0, usageError{err}
 		}
