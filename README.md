@@ -23,7 +23,7 @@ library has no dependencies outside the Go standard library.
 - [x] `solarpos`: NREL SPA and NOAA solar position
 - [x] `irradiance`: angle of incidence, isotropic, Hay-Davies, Perez, Erbs
 - [x] `thermal`: Faiman and SAPM cell temperature
-- [ ] `power`: PVWatts v5 DC, losses, inverter and clipping
+- [x] `power`: PVWatts v5 DC, losses, inverter and clipping
 - [ ] `weather/openmeteo`: Open-Meteo forecast provider
 - [ ] `forecast`: pipeline, multi-array systems, interval conventions
 - [ ] `pvforecast` CLI with table, JSON and CSV output
@@ -62,6 +62,10 @@ all eight Perez sky-clearness bins and zenith angles up to 89.98°:
 | Erbs DNI / DHI | 5.7e-9 W/m² | 1e-6 W/m² |
 | Kasten-Young air mass | 5.0e-9 | 1e-7 |
 | Cell temperature, Faiman and four SAPM mountings | 5.0e-9 K | 1e-7 K |
+| PVWatts DC power | 1.8e-12 W | 1e-6 W |
+| PVWatts inverter (part load to clipping) | 4.9e-9 W | 1e-6 W |
+| IAM, physical and ASHRAE | 4.9e-9 | 1e-7 |
+| PVWatts losses (default 14.08 %) | < 1e-8 % | 1e-7 % |
 
 Behavior near the horizon and for negative inputs is documented in
 [ADR 0004](docs/adr/0004-irradiance-edge-conventions.md).

@@ -220,6 +220,66 @@ def thermal(out: Path) -> int:
     return rows
 
 
+def power(out_dir: Path) -> dict[str, int]:
+    counts = {}
+    with (out_dir / "power_dc.csv").open("w", newline="") as f:
+        w = csv.writer(f, lineterminator="\n")
+        w.writerow(["geff", "temp_cell", "pdc0", "gamma", "pdc"])
+        n = 0
+        for g in [0.0, 1.0, 50.0, 200.0, 600.0, 1000.0, 1250.0]:
+            for tc in [-25.0, 0.0, 25.0, 45.0, 70.0]:
+                for gamma in [-0.0035, -0.004, -0.005]:
+                    pdc = pvlib.pvsystem.pvwatts_dc(g, tc, 10000.0, gamma)
+                    w.writerow([g, tc, 10000.0, gamma, _fmt(float(pdc))])
+                    n += 1
+        counts["power_dc.csv"] = n
+    with (out_dir / "power_inverter.csv").open("w", newline="") as f:
+        w = csv.writer(f, lineterminator="\n")
+        w.writerow(["pdc", "pdc0", "eta_nom", "eta_ref", "pac"])
+        pdc0 = 10000.0 / 0.96
+        n = 0
+        for frac in np.concatenate([[0.0, 0.001, 0.003, 0.005, 0.01, 0.02],
+                                    np.linspace(0.05, 1.4, 28)]):
+            pdc = frac * pdc0
+            pac = pvlib.inverter.pvwatts(pdc, pdc0)
+            w.writerow([_fmt(pdc), _fmt(pdc0), 0.96, 0.9637, _fmt(float(pac))])
+            n += 1
+        counts["power_inverter.csv"] = n
+    with (out_dir / "power_iam.csv").open("w", newline="") as f:
+        w = csv.writer(f, lineterminator="\n")
+        w.writerow(["aoi", "physical", "ashrae"])
+        aois = np.concatenate([np.arange(0, 90, 2.5), [87.5, 89.0, 89.9, 90.0, 95.0]])
+        phys = np.asarray(pvlib.iam.physical(aois))
+        ash = np.asarray(pvlib.iam.ashrae(aois))
+        for a, p, s in zip(aois, phys, ash):
+            w.writerow([_fmt(a), _fmt(p), _fmt(s)])
+        counts["power_iam.csv"] = len(aois)
+    with (out_dir / "power_losses.csv").open("w", newline="") as f:
+        w = csv.writer(f, lineterminator="\n")
+        w.writerow(["soiling", "shading", "snow", "mismatch", "wiring",
+                    "connections", "lid", "nameplate", "age", "availability",
+                    "total"])
+        cases = [
+            {},
+            dict(soiling=0, shading=0, snow=0, mismatch=0, wiring=0,
+                 connections=0, lid=0, nameplate_rating=0, age=0,
+                 availability=0),
+            dict(soiling=5, shading=10, snow=8, age=5),
+        ]
+        keys = ["soiling", "shading", "snow", "mismatch", "wiring",
+                "connections", "lid", "nameplate_rating", "age",
+                "availability"]
+        defaults = dict(soiling=2, shading=3, snow=0, mismatch=2, wiring=2,
+                        connections=0.5, lid=1.5, nameplate_rating=1, age=0,
+                        availability=3)
+        for c in cases:
+            p = {**defaults, **c}
+            total = pvlib.pvsystem.pvwatts_losses(**p)
+            w.writerow([p[k] for k in keys] + [_fmt(float(total))])
+        counts["power_losses.csv"] = len(cases)
+    return counts
+
+
 def main() -> None:
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--out", type=Path, default=Path("internal/testdata"))
@@ -231,6 +291,8 @@ def main() -> None:
     print(f"  irradiance_airmass.csv:     {airmass(args.out / 'irradiance_airmass.csv')} rows")
     print(f"  irradiance_erbs.csv:        {erbs(args.out / 'irradiance_erbs.csv')} rows")
     print(f"  thermal.csv:                {thermal(args.out / 'thermal.csv')} rows")
+    for name, n in power(args.out).items():
+        print(f"  {name + ':':28s}{n} rows")
 
 
 if __name__ == "__main__":
