@@ -1,0 +1,20 @@
+# Build output
+/bin/
+/dist/
+
+# Test and coverage artefacts
+*.test
+*.out
+*.prof
+/coverage.*
+
+# Python tooling for fixture generation (tools/fixtures)
+.venv/
+__pycache__/
+*.pyc
+
+# Editors / OS
+.idea/
+.vscode/
+*.swp
+.DS_Store
