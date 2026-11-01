@@ -7,6 +7,10 @@ PKGS            ?= ./...
 COVER_PROFILE   ?= coverage.out
 BENCH           ?= .
 BENCH_COUNT     ?= 6
+FUZZTIME        ?= 30s
+PYTHON          ?= python3
+# package:FuzzTarget pairs run by `make fuzz`.
+FUZZ_TARGETS    := ./solarpos:FuzzPosition
 
 .DEFAULT_GOAL := help
 
@@ -34,6 +38,18 @@ cover: ## Run tests with coverage and print a per-function summary.
 .PHONY: bench
 bench: ## Run benchmarks (feed the output to benchstat to compare commits).
 	$(GO) test -run='^$$' -bench='$(BENCH)' -benchmem -count=$(BENCH_COUNT) $(PKGS)
+
+.PHONY: fuzz
+fuzz: ## Run every fuzz target for FUZZTIME each.
+	@set -e; for t in $(FUZZ_TARGETS); do \
+		pkg=$${t%%:*}; name=$${t##*:}; \
+		echo "fuzz $$pkg $$name"; \
+		$(GO) test $$pkg -run='^$$' -fuzz="^$$name\$$" -fuzztime=$(FUZZTIME); \
+	done
+
+.PHONY: fixtures
+fixtures: ## Regenerate pvlib reference fixtures (needs Python 3 and tools/fixtures/requirements.txt).
+	$(PYTHON) -I tools/fixtures/gen.py --out internal/testdata
 
 .PHONY: lint
 lint: ## Run golangci-lint (linters and formatters).
