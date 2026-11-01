@@ -21,7 +21,7 @@ library has no dependencies outside the Go standard library.
 
 - [x] Repository skeleton, CI, lint and supply-chain tooling
 - [x] `solarpos`: NREL SPA and NOAA solar position
-- [ ] `irradiance`: angle of incidence, isotropic, Hay-Davies, Perez, Erbs
+- [x] `irradiance`: angle of incidence, isotropic, Hay-Davies, Perez, Erbs
 - [ ] `thermal`: Faiman and SAPM cell temperature
 - [ ] `power`: PVWatts v5 DC, losses, inverter and clipping
 - [ ] `weather/openmeteo`: Open-Meteo forecast provider
@@ -49,10 +49,28 @@ SPA errors are limited by the ten decimal places stored in the fixtures. The
 SPA implementation also reproduces the worked example of the NREL report
 (Table A5.1). Tests enforce a tolerance of 1e-6° for SPA.
 
-| Benchmark (one position, Xeon 2.8 GHz) | Time | Allocations |
+Irradiance models are compared with pvlib over 3,202 samples covering five
+sites, six tilts (0–90°), five orientations, four cloud levels, three albedos,
+all eight Perez sky-clearness bins and zenith angles up to 89.98°:
+
+| Quantity | Max error vs pvlib | Test tolerance |
 |---|---|---|
-| SPA | ≈ 5.5 µs | 0 |
-| NOAA | ≈ 0.6 µs | 0 |
+| Angle of incidence | 1.1e-8° | 1e-6° |
+| Beam, ground-reflected, isotropic | 6.2e-8 W/m² | 1e-6 W/m² |
+| Hay-Davies (total and components) | 4.2e-8 W/m² | 1e-6 W/m² |
+| Perez (total and components) | 2.3e-7 W/m² | 1e-6 W/m² |
+| Erbs DNI / DHI | 5.7e-9 W/m² | 1e-6 W/m² |
+| Kasten-Young air mass | 5.0e-9 | 1e-7 |
+
+Behavior near the horizon and for negative inputs is documented in
+[ADR 0004](docs/adr/0004-irradiance-edge-conventions.md).
+
+| Benchmark (Xeon 2.8 GHz) | Time | Allocations |
+|---|---|---|
+| Solar position, SPA | ≈ 5.5 µs | 0 |
+| Solar position, NOAA | ≈ 0.6 µs | 0 |
+| Transposition, isotropic / Hay-Davies | ≈ 0.22 µs | 0 |
+| Transposition, Perez | ≈ 0.39 µs | 0 |
 
 ## Contributing
 

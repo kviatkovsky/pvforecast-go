@@ -38,6 +38,12 @@ linters:
         # results are often clearer than the compact form these checks want.
         - unnamedResult
         - paramTypeCombine
+      settings:
+        hugeParam:
+          # Physics inputs are small value types passed by value on purpose:
+          # functions stay pure and can sanitize their own copy. Copying
+          # under 128 bytes costs about a nanosecond.
+          sizeThreshold: 128
     govet:
       enable-all: true
       disable:
