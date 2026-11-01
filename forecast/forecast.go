@@ -44,6 +44,19 @@ type Options struct {
 	Now func() time.Time
 }
 
+// ErrInvalidOptions is wrapped by errors about Options fields.
+var ErrInvalidOptions = errors.New("forecast: invalid options")
+
+func (o Options) validate() error {
+	if !o.Transposition.Valid() {
+		return fmt.Errorf("%w: %w: %d", ErrInvalidOptions, irradiance.ErrUnknownModel, int(o.Transposition))
+	}
+	if !(o.ModuleHeightM >= 0) {
+		return fmt.Errorf("%w: module height %g m must be zero (off) or positive", ErrInvalidOptions, o.ModuleHeightM)
+	}
+	return nil
+}
+
 // DefaultOptions returns the recommended options: Perez transposition and
 // the SPA.
 func DefaultOptions() Options {
@@ -70,8 +83,8 @@ type Point struct {
 
 // DailyEnergy is the AC energy of one local calendar day.
 type DailyEnergy struct {
-	Date string  // YYYY-MM-DD in Options.Location
-	KWh  float64 // AC energy
+	Date string  `json:"date"` // YYYY-MM-DD in Options.Location
+	KWh  float64 `json:"kwh"`  // AC energy
 }
 
 // Result is a forecast time series with its energy totals.
@@ -116,8 +129,8 @@ func Compute(sys System, ws weather.Series, opt Options) (Result, error) {
 	if err := ws.Validate(); err != nil {
 		return Result{}, fmt.Errorf("forecast: %w", err)
 	}
-	if !opt.Transposition.Valid() {
-		return Result{}, fmt.Errorf("forecast: %w: %d", irradiance.ErrUnknownModel, int(opt.Transposition))
+	if err := opt.validate(); err != nil {
+		return Result{}, err
 	}
 
 	alg := opt.SolarPos

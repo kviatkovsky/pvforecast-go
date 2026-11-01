@@ -336,8 +336,17 @@ func TestOptionsEffects(t *testing.T) {
 		t.Error("array options had no effect")
 	}
 
+	for _, bad := range []forecast.Options{
+		{Transposition: 9},
+		{ModuleHeightM: -1},
+		{ModuleHeightM: math.NaN()},
+	} {
+		if _, err := forecast.Compute(southSystem(), series, bad); !errors.Is(err, forecast.ErrInvalidOptions) {
+			t.Errorf("options %+v: err = %v, want ErrInvalidOptions", bad, err)
+		}
+	}
 	if _, err := forecast.Compute(southSystem(), series, forecast.Options{Transposition: 9}); !errors.Is(err, irradiance.ErrUnknownModel) {
-		t.Errorf("invalid model: err = %v", err)
+		t.Error("invalid model error does not wrap irradiance.ErrUnknownModel")
 	}
 	bad := series
 	bad.Interval = 0

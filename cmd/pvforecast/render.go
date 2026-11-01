@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math"
 	"strconv"
 	"strings"
 	"text/tabwriter"
@@ -160,6 +161,6 @@ func renderCSV(w io.Writer, r *report) error {
 // round rounds to the given number of decimals for display; the library
 // keeps full precision.
 func round(v float64, decimals int) float64 {
-	v, _ = strconv.ParseFloat(strconv.FormatFloat(v, 'f', decimals, 64), 64)
-	return v
+	p := math.Pow10(decimals)
+	return math.Round(v*p) / p
 }

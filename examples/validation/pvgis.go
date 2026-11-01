@@ -138,6 +138,9 @@ func summarize(res forecast.Result, tilted []hourly) (string, error) {
 		refPOA[i] = tilted[i].Gb + tilted[i].Gd + tilted[i].Gr
 	}
 	pw, poa := errorMetrics(modelP, refP), errorMetrics(modelPOA, refPOA)
+	if pw.RefTotal <= 0 || poa.RefTotal <= 0 {
+		return "", errors.New("pvgis: reference data has no daytime values")
+	}
 
 	var b strings.Builder
 	fmt.Fprintf(&b, "Site %.4f, %.4f · 1 kWp, tilt %d°, south · %d %% losses · year %d · %d hours\n\n",

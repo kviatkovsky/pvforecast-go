@@ -112,6 +112,14 @@ func TestCompare(t *testing.T) {
 	if _, err := compare(h, short); err == nil {
 		t.Error("mismatched row counts accepted")
 	}
+	night := filepath.Join(dir, "night.json")
+	nightJSON := `{"outputs":{"hourly":[{"time":"20200621:0010","P":0,"H_sun":-14,"T2m":14,"WS10m":1}]}}`
+	if err := os.WriteFile(night, []byte(nightJSON), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := compare(night, night); err == nil {
+		t.Error("reference without daytime values accepted")
+	}
 	if _, err := compare(filepath.Join(dir, "missing.json"), tl); err == nil {
 		t.Error("missing file accepted")
 	}

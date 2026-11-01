@@ -62,9 +62,15 @@ var _ weather.Provider = (*Client)(nil)
 // Option configures a Client.
 type Option func(*Client)
 
-// WithHTTPClient sets the HTTP client. The default is a client with a 30 s
-// timeout; set timeouts per call through the context.
-func WithHTTPClient(c *http.Client) Option { return func(cl *Client) { cl.httpClient = c } }
+// WithHTTPClient sets the HTTP client; nil keeps the default, a client with
+// a 30 s timeout. Set per-call deadlines through the context.
+func WithHTTPClient(c *http.Client) Option {
+	return func(cl *Client) {
+		if c != nil {
+			cl.httpClient = c
+		}
+	}
+}
 
 // WithBaseURL overrides the endpoint, for example to use a self-hosted
 // instance or a test server.
@@ -215,10 +221,20 @@ func (c *Client) getWithRetry(ctx context.Context, u string) ([]byte, error) {
 // backoffFor returns the exponential backoff for an attempt with "equal
 // jitter": half fixed, half random, so concurrent clients spread out.
 func (c *Client) backoffFor(attempt int) time.Duration {
-	d := min(c.backoff<<attempt, maxBackoff)
-	if d <= 0 {
+	if c.backoff <= 0 {
 		return 0
 	}
+	// Double until the cap; shifting blindly would overflow after ~35
+	// attempts and turn the wait into zero.
+	d := c.backoff
+	for range attempt {
+		if d >= maxBackoff/2 {
+			d = maxBackoff
+			break
+		}
+		d *= 2
+	}
+	d = min(d, maxBackoff)
 	half := d / 2
 	return half + rand.N(half+1) //nolint:gosec // jitter does not need a CSPRNG
 }
