@@ -24,7 +24,7 @@ library has no dependencies outside the Go standard library.
 - [x] `irradiance`: angle of incidence, isotropic, Hay-Davies, Perez, Erbs
 - [x] `thermal`: Faiman and SAPM cell temperature
 - [x] `power`: PVWatts v5 DC, losses, inverter and clipping
-- [ ] `weather/openmeteo`: Open-Meteo forecast provider
+- [x] `weather/openmeteo`: Open-Meteo forecast provider
 - [ ] `forecast`: pipeline, multi-array systems, interval conventions
 - [ ] `pvforecast` CLI with table, JSON and CSV output
 - [ ] Validation against PVGIS and Open-Meteo GTI

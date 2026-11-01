@@ -81,8 +81,11 @@ linters:
     rules:
       # Reference values in tests are compared with explicit tolerances and
       # generated inputs are deterministic; these checks only add noise there.
+      # Tests build fake *http.Response values for in-memory transports;
+      # the client under test closes their bodies.
       - path: _test\.go
         linters:
+          - bodyclose
           - gosec
           - perfsprint
 

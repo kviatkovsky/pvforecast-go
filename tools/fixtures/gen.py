@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import json
 import math
 from pathlib import Path
 
@@ -280,6 +281,63 @@ def power(out_dir: Path) -> dict[str, int]:
     return counts
 
 
+def openmeteo(out_dir: Path) -> list[str]:
+    """Synthetic responses in the Open-Meteo forecast format.
+
+    These are NOT recorded API responses: values are pvlib clear-sky
+    irradiance for Krakow with a simple diurnal temperature and wind
+    pattern, so that tests are deterministic and need no network. Use
+    `make record` to capture a real response.
+    """
+    lat, lon, alt = 50.0647, 19.9450, 219.0
+    start = pd.Timestamp("2026-06-20T00:00Z")
+    times = pd.date_range(start, periods=72, freq="1h")
+    # Interval-end hourly means are approximated at the interval midpoint.
+    mid = times - pd.Timedelta(minutes=30)
+    loc = pvlib.location.Location(lat, lon, altitude=alt)
+    written = []
+    for kind, eval_times in (("averaged", mid), ("instant", times)):
+        sp = loc.get_solarposition(eval_times)
+        cs = loc.get_clearsky(eval_times, model="haurwitz", solar_position=sp)
+        dec = pvlib.irradiance.erbs(cs["ghi"], sp["apparent_zenith"], eval_times)
+        hours = np.asarray(eval_times.hour + eval_times.minute / 60.0)
+        temp = 18 + 7 * np.sin((hours - 9) / 24 * 2 * np.pi)
+        wind = 2.5 + 1.5 * np.sin((hours - 12) / 24 * 2 * np.pi)
+        suffix = "_instant" if kind == "instant" else ""
+        cols = {
+            f"shortwave_radiation{suffix}": np.asarray(cs["ghi"]),
+            f"direct_normal_irradiance{suffix}": np.asarray(dec["dni"]),
+            f"diffuse_radiation{suffix}": np.asarray(dec["dhi"]),
+            "temperature_2m": temp,
+            "wind_speed_10m": wind,
+        }
+        hourly = {"time": [t.strftime("%Y-%m-%dT%H:%M") for t in times]}
+        for k, v in cols.items():
+            vals = [round(float(x), 1) for x in v]
+            # The API returns null past the end of a model's horizon.
+            vals[-3:] = [None, None, None]
+            hourly[k] = vals
+        doc = {
+            "latitude": 50.06,
+            "longitude": 19.94,
+            "generationtime_ms": 0.1,
+            "utc_offset_seconds": 0,
+            "timezone": "UTC",
+            "timezone_abbreviation": "GMT",
+            "elevation": alt,
+            "hourly_units": {"time": "iso8601", **{
+                k: ("°C" if k.startswith("temp") else
+                    "m/s" if k.startswith("wind") else "W/m²")
+                for k in cols}},
+            "hourly": hourly,
+        }
+        name = f"forecast_{kind}.json"
+        (out_dir / name).write_text(
+            json.dumps(doc, ensure_ascii=False, indent=1) + "\n")
+        written.append(name)
+    return written
+
+
 def main() -> None:
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--out", type=Path, default=Path("internal/testdata"))
@@ -293,6 +351,10 @@ def main() -> None:
     print(f"  thermal.csv:                {thermal(args.out / 'thermal.csv')} rows")
     for name, n in power(args.out).items():
         print(f"  {name + ':':28s}{n} rows")
+    om = args.out / "openmeteo"
+    om.mkdir(exist_ok=True)
+    for name in openmeteo(om):
+        print(f"  openmeteo/{name} (synthetic)")
 
 
 if __name__ == "__main__":
