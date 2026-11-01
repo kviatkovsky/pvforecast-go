@@ -49,3 +49,11 @@ changes.
 
 Significant design or modelling decisions are recorded as ADRs in
 [`docs/adr`](docs/adr). Add one when your change makes such a decision.
+
+## Releasing
+
+Releases are cut by pushing a `v*` tag on `main`. The `Release` workflow runs
+the tests, then GoReleaser builds the binaries, archives, SBOMs and the
+signed checksum file, and publishes the GitHub release with a changelog
+grouped by Conventional Commit type. Check the configuration locally with
+`goreleaser check` and `goreleaser build --snapshot --clean`.

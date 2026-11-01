@@ -4,6 +4,7 @@
 [![Go Reference](https://pkg.go.dev/badge/github.com/kviatkovsky/pvforecast-go.svg)](https://pkg.go.dev/github.com/kviatkovsky/pvforecast-go)
 [![Go Report Card](https://goreportcard.com/badge/github.com/kviatkovsky/pvforecast-go)](https://goreportcard.com/report/github.com/kviatkovsky/pvforecast-go)
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/kviatkovsky/pvforecast-go/badge)](https://scorecard.dev/viewer/?uri=github.com/kviatkovsky/pvforecast-go)
+[![Release](https://img.shields.io/github/v/release/kviatkovsky/pvforecast-go)](https://github.com/kviatkovsky/pvforecast-go/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 **Physics-based photovoltaic power forecasting in Go.** Describe a PV system
@@ -27,7 +28,10 @@ go install github.com/kviatkovsky/pvforecast-go/cmd/pvforecast@latest
 ```
 
 Prebuilt binaries for Linux, macOS and Windows (amd64, arm64) are attached to
-each [release](https://github.com/kviatkovsky/pvforecast-go/releases).
+each [release](https://github.com/kviatkovsky/pvforecast-go/releases), with
+an SBOM per archive and a checksum file signed keylessly with
+[Sigstore](https://www.sigstore.dev/); the release notes show the
+`cosign verify-blob` command.
 
 ## Command line
 

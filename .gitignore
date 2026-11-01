@@ -1,6 +1,5 @@
 # Build output
 /bin/
-/dist/
 
 # Test and coverage artefacts
 *.test
@@ -18,3 +17,4 @@ __pycache__/
 .vscode/
 *.swp
 .DS_Store
+dist/
