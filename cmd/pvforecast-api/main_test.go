@@ -79,6 +79,11 @@ func TestServeAndShutdown(t *testing.T) {
 		}
 	}
 
+	port := addr[strings.LastIndex(addr, ":")+1:]
+	if code := healthcheck(t.Context(), env("PORT", port)); code != 0 {
+		t.Errorf("healthcheck against a running server = %d, want 0", code)
+	}
+
 	cancel()
 	select {
 	case err := <-done:
@@ -94,5 +99,16 @@ func TestRunRejectsBadConfig(t *testing.T) {
 	t.Parallel()
 	if err := run(t.Context(), env("MAX_IN_FLIGHT", "-3"), nil); err == nil || !strings.Contains(err.Error(), "MAX_IN_FLIGHT") {
 		t.Errorf("err = %v", err)
+	}
+}
+
+func TestHealthcheckFailures(t *testing.T) {
+	t.Parallel()
+	// Port 1 is reserved and nothing listens on it.
+	if code := healthcheck(t.Context(), env("PORT", "1")); code != 1 {
+		t.Errorf("no server: healthcheck = %d, want 1", code)
+	}
+	if code := healthcheck(t.Context(), env("PORT", "x")); code != 1 {
+		t.Errorf("bad config: healthcheck = %d, want 1", code)
 	}
 }

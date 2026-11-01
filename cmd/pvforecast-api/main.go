@@ -14,6 +14,10 @@
 //	OPENMETEO_URL     Open-Meteo endpoint (default the public API)
 //
 // It shuts down gracefully on SIGINT and SIGTERM.
+//
+// "pvforecast-api healthcheck" probes /healthz on the local PORT and exits
+// 0 when it answers 200. The container image uses it for HEALTHCHECK,
+// because the distroless base has no curl or shell.
 package main
 
 import (
@@ -38,6 +42,9 @@ import (
 var version = "dev"
 
 func main() {
+	if len(os.Args) > 1 && os.Args[1] == "healthcheck" {
+		os.Exit(healthcheck(context.Background(), os.Getenv))
+	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	err := run(ctx, os.Getenv, nil)
 	stop()
@@ -45,6 +52,33 @@ func main() {
 		fmt.Fprintf(os.Stderr, "pvforecast-api: %v\n", err)
 		os.Exit(1)
 	}
+}
+
+// healthcheck returns 0 if the server on the configured port is healthy.
+func healthcheck(ctx context.Context, getenv func(string) string) int {
+	cfg, err := load(getenv)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "healthcheck: %v\n", err)
+		return 1
+	}
+	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://127.0.0.1:"+cfg.port+"/healthz", http.NoBody)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "healthcheck: %v\n", err)
+		return 1
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "healthcheck: %v\n", err)
+		return 1
+	}
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		fmt.Fprintf(os.Stderr, "healthcheck: HTTP %d\n", resp.StatusCode)
+		return 1
+	}
+	return 0
 }
 
 // settings are the parsed environment.
