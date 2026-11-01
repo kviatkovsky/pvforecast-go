@@ -124,6 +124,9 @@ func renderJSON(w io.Writer, r *report) error {
 			DCkW: round(p.DCkW, 4), ACkW: round(p.ACkW, 4), Clipped: p.Clipped,
 		}
 	}
+	// Every number is rounded to display precision: full-precision floats
+	// differ in the last bits between amd64 and arm64 (where the compiler
+	// fuses multiply-adds), which would make the output platform-dependent.
 	for i, d := range r.res.Daily {
 		out.Daily[i] = forecast.DailyEnergy{Date: d.Date, KWh: round(d.KWh, 3)}
 	}
