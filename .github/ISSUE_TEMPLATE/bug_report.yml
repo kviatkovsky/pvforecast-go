@@ -1,0 +1,30 @@
+name: Bug report
+description: Report incorrect results, crashes or other unexpected behaviour.
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: Include the command or code you ran and its full output.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect?
+      description: For numerical issues, include the reference value and its source (for example, pvlib version and function).
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Output of `pvforecast version`, or the module version you import.
+    validations:
+      required: true
+  - type: input
+    id: go
+    attributes:
+      label: Go version and OS
+      placeholder: go1.27.3 linux/amd64

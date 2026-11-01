@@ -1,0 +1,94 @@
+version: "2"
+
+run:
+  timeout: 5m
+
+linters:
+  default: standard # errcheck, govet, ineffassign, staticcheck, unused
+  enable:
+    - bodyclose
+    - copyloopvar
+    - errname
+    - errorlint
+    - exhaustive
+    - gocritic
+    - godot
+    - gosec
+    - intrange
+    - misspell
+    - nolintlint
+    - perfsprint
+    - revive
+    - thelper
+    - unconvert
+    - unparam
+    - usestdlibvars
+  settings:
+    errcheck:
+      check-type-assertions: true
+    exhaustive:
+      default-signifies-exhaustive: true
+    gocritic:
+      enabled-tags:
+        - diagnostic
+        - performance
+        - style
+      disabled-checks:
+        # Physics code mirrors the published equations; named intermediate
+        # results are often clearer than the compact form these checks want.
+        - unnamedResult
+        - paramTypeCombine
+    govet:
+      enable-all: true
+      disable:
+        # Struct layout follows the physical meaning of fields, not padding.
+        - fieldalignment
+    misspell:
+      locale: US
+    nolintlint:
+      require-explanation: true
+      require-specific: true
+    revive:
+      rules:
+        - name: exported
+        - name: package-comments
+        - name: var-naming
+        - name: receiver-naming
+        - name: error-naming
+        - name: error-strings
+        - name: error-return
+        - name: errorf
+        - name: context-as-argument
+        - name: context-keys-type
+        - name: unexported-return
+        - name: indent-error-flow
+        - name: superfluous-else
+        - name: unused-parameter
+        - name: redefines-builtin-id
+        - name: increment-decrement
+        - name: range
+        - name: time-naming
+        - name: var-declaration
+  exclusions:
+    presets:
+      - std-error-handling
+    rules:
+      # Reference values in tests are compared with explicit tolerances and
+      # generated inputs are deterministic; these checks only add noise there.
+      - path: _test\.go
+        linters:
+          - gosec
+          - perfsprint
+
+formatters:
+  enable:
+    - gofumpt
+    - goimports
+  settings:
+    gofumpt:
+      extra:
+        group-params: true
+        clothe-returns: true
+    goimports:
+      local-prefixes:
+        - github.com/kviatkovsky/pvforecast-go
