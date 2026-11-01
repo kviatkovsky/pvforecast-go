@@ -338,6 +338,74 @@ def openmeteo(out_dir: Path) -> list[str]:
     return written
 
 
+def pipeline(out: Path, om_dir: Path) -> int:
+    """End-to-end reference: the whole PVWatts chain built from pvlib
+    functions, fed with the synthetic Open-Meteo series.
+
+    Each hourly mean is evaluated at its interval midpoint, matching the
+    Go convention for interval-end labels. Night-time Perez NaN (DHI = 0)
+    is reported as zero, as in the Go code (ADR 0004).
+    """
+    doc = json.loads((om_dir / "forecast_averaged.json").read_text())
+    h = doc["hourly"]
+    keep = [i for i, v in enumerate(h["shortwave_radiation"]) if v is not None]
+    label = pd.DatetimeIndex([h["time"][i] for i in keep], tz="UTC")
+    mid = label - pd.Timedelta(minutes=30)
+    w = pd.DataFrame({
+        "ghi": [h["shortwave_radiation"][i] for i in keep],
+        "dni": [h["direct_normal_irradiance"][i] for i in keep],
+        "dhi": [h["diffuse_radiation"][i] for i in keep],
+        "temp_air": [h["temperature_2m"][i] for i in keep],
+        "wind_speed": [h["wind_speed_10m"][i] for i in keep],
+    }, index=mid)
+
+    lat, lon, alt = 50.0647, 19.9450, 219.0
+    sp = pvlib.solarposition.spa_python(
+        mid, lat, lon, altitude=alt, pressure=standard_pressure(alt),
+        temperature=12.0, delta_t=DELTA_T, how="numpy")
+    dist = pvlib.solarposition.nrel_earthsun_distance(mid, delta_t=DELTA_T)
+    dni_extra = 1361.0 / dist ** 2
+    airmass = pvlib.atmosphere.get_relative_airmass(sp["apparent_zenith"])
+    losses = pvlib.pvsystem.pvwatts_losses()
+    sapm = pvlib.temperature.TEMPERATURE_MODEL_PARAMETERS["sapm"]["open_rack_glass_polymer"]
+
+    systems = {
+        # name: (model, inverter AC kW, [(kWp, tilt, azimuth)])
+        "south": ("perez", 10.0 / 1.1, [(10.0, 35.0, 180.0)]),
+        "eastwest": ("haydavies", 9.0, [(6.0, 15.0, 90.0), (6.0, 15.0, 270.0)]),
+    }
+    rows = 0
+    with out.open("w", newline="") as f:
+        wr = csv.writer(f, lineterminator="\n")
+        wr.writerow(["system", "time", "poa", "cell_temp", "dc_kw", "ac_kw"])
+        for name, (model, ac_kw, arrays) in systems.items():
+            pdc_total = 0.0
+            poa_w = 0.0
+            tc_w = 0.0
+            kwp_total = sum(a[0] for a in arrays)
+            for kwp, tilt, az in arrays:
+                irr = pvlib.irradiance.get_total_irradiance(
+                    tilt, az, sp["apparent_zenith"], sp["azimuth"],
+                    w["dni"], w["ghi"], w["dhi"], dni_extra=dni_extra,
+                    airmass=airmass, albedo=0.25, model=model)
+                irr = irr.fillna(0.0)
+                aoi = pvlib.irradiance.aoi(tilt, az, sp["apparent_zenith"], sp["azimuth"])
+                iam = pvlib.iam.physical(aoi)
+                geff = irr["poa_direct"] * iam + irr["poa_diffuse"]
+                tc = pvlib.temperature.sapm_cell(
+                    irr["poa_global"], w["temp_air"], w["wind_speed"], **sapm)
+                pdc_total = pdc_total + pvlib.pvsystem.pvwatts_dc(geff, tc, kwp * 1000, -0.004)
+                poa_w = poa_w + irr["poa_global"] * kwp
+                tc_w = tc_w + tc * kwp
+            pdc = pdc_total * (1 - losses / 100)
+            pac = pvlib.inverter.pvwatts(pdc, ac_kw * 1000 / 0.96)
+            for t, p, c, d, a in zip(label, poa_w / kwp_total, tc_w / kwp_total, pdc, pac):
+                wr.writerow([name, t.strftime("%Y-%m-%dT%H:%M:%SZ"), _fmt(p),
+                             _fmt(c), _fmt(d / 1000), _fmt(a / 1000)])
+                rows += 1
+    return rows
+
+
 def main() -> None:
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--out", type=Path, default=Path("internal/testdata"))
@@ -355,6 +423,7 @@ def main() -> None:
     om.mkdir(exist_ok=True)
     for name in openmeteo(om):
         print(f"  openmeteo/{name} (synthetic)")
+    print(f"  forecast_pipeline.csv:      {pipeline(args.out / 'forecast_pipeline.csv', om)} rows")
 
 
 if __name__ == "__main__":
