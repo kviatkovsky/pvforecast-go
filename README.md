@@ -25,7 +25,7 @@ library has no dependencies outside the Go standard library.
 - [x] `thermal`: Faiman and SAPM cell temperature
 - [x] `power`: PVWatts v5 DC, losses, inverter and clipping
 - [x] `weather/openmeteo`: Open-Meteo forecast provider
-- [ ] `forecast`: pipeline, multi-array systems, interval conventions
+- [x] `forecast`: pipeline, multi-array systems, interval conventions
 - [ ] `pvforecast` CLI with table, JSON and CSV output
 - [ ] Validation against PVGIS and Open-Meteo GTI
 - [ ] Signed release binaries
@@ -67,6 +67,13 @@ all eight Perez sky-clearness bins and zenith angles up to 89.98°:
 | IAM, physical and ASHRAE | 4.9e-9 | 1e-7 |
 | PVWatts losses (default 14.08 %) | < 1e-8 % | 1e-7 % |
 
+The complete pipeline (SPA → Perez or Hay-Davies → physical IAM → SAPM
+cell temperature → PVWatts DC → losses → PVWatts inverter) is also compared
+end to end with the same chain assembled from pvlib functions, for a
+south-facing and an east-west system over three days of hourly data: AC
+power, DC power, plane-of-array irradiance and cell temperature agree to
+within 5e-9 (kW, W/m², °C).
+
 Behavior near the horizon and for negative inputs is documented in
 [ADR 0004](docs/adr/0004-irradiance-edge-conventions.md).
 
@@ -76,6 +83,16 @@ Behavior near the horizon and for negative inputs is documented in
 | Solar position, NOAA | ≈ 0.6 µs | 0 |
 | Transposition, isotropic / Hay-Davies | ≈ 0.22 µs | 0 |
 | Transposition, Perez | ≈ 0.39 µs | 0 |
+| `Compute`, one year hourly (8760 samples), SPA | ≈ 60 ms (≈ 7 µs/sample) | 370 per call, 0 per sample |
+| `Compute`, one year hourly, NOAA | ≈ 11 ms (≈ 1.3 µs/sample) | 370 per call, 0 per sample |
+
+## Timestamp convention
+
+Open-Meteo reports hourly radiation as the mean over the preceding hour,
+labeled at the end of the hour. The pipeline evaluates the sun at the middle
+of each interval (label − 30 min) and attributes the energy to the local
+date of that midpoint. Instantaneous (`_instant`) data is used as labeled.
+See [ADR 0006](docs/adr/0006-timestamp-convention.md).
 
 ## Contributing
 
