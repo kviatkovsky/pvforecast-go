@@ -114,7 +114,7 @@ func renderJSON(w io.Writer, r *report) error {
 		System: r.sys.Name, KWp: r.sys.DCkWp(), Source: r.res.Source,
 		Label: r.res.Label.String(), Interval: r.res.Interval.String(),
 		Model: r.opt.Transposition.String(), TimeZone: r.opt.Location.String(),
-		Points: make([]jsonPoint, len(r.res.Points)), Daily: r.res.Daily,
+		Points: make([]jsonPoint, len(r.res.Points)), Daily: make([]forecast.DailyEnergy, len(r.res.Daily)),
 		TotalKWh: r.res.TotalKWh, PeakACkW: r.res.PeakACkW,
 	}
 	for i, p := range r.res.Points {
@@ -123,6 +123,13 @@ func renderJSON(w io.Writer, r *report) error {
 			DCkW: round(p.DCkW, 4), ACkW: round(p.ACkW, 4), Clipped: p.Clipped,
 		}
 	}
+	// Every number is rounded to display precision: full-precision floats
+	// differ in the last bits between amd64 and arm64 (where the compiler
+	// fuses multiply-adds), which would make the output platform-dependent.
+	for i, d := range r.res.Daily {
+		out.Daily[i] = forecast.DailyEnergy{Date: d.Date, KWh: round(d.KWh, 3)}
+	}
+	out.TotalKWh, out.PeakACkW = round(out.TotalKWh, 3), round(out.PeakACkW, 4)
 	enc := json.NewEncoder(w)
 	enc.SetIndent("", "  ")
 	return enc.Encode(out)
