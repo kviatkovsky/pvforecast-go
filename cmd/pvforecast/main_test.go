@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/kviatkovsky/pvforecast-go/internal/config"
 	"github.com/kviatkovsky/pvforecast-go/internal/testutil"
 	"github.com/kviatkovsky/pvforecast-go/weather"
 	"github.com/kviatkovsky/pvforecast-go/weather/openmeteo"
@@ -160,9 +161,9 @@ func TestConfig(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			cfg, err := decodeConfig(strings.NewReader(tt.json))
+			cfg, err := config.Decode(strings.NewReader(tt.json))
 			if err == nil {
-				_, err = cfg.system(1.1)
+				_, err = cfg.Build(1.1)
 			}
 			switch {
 			case tt.wantErr == "" && err != nil:
@@ -172,11 +173,11 @@ func TestConfig(t *testing.T) {
 			}
 		})
 	}
-	cfg, err := loadConfig("../../examples/system.json")
+	cfg, err := config.Load("../../examples/system.json")
 	if err != nil {
 		t.Fatal(err)
 	}
-	sys, err := cfg.system(1.1)
+	sys, err := cfg.Build(1.1)
 	if err != nil {
 		t.Fatal(err)
 	}

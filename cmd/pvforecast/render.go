@@ -5,13 +5,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"math"
 	"strconv"
 	"strings"
 	"text/tabwriter"
 	"time"
 
 	"github.com/kviatkovsky/pvforecast-go/forecast"
+	rep "github.com/kviatkovsky/pvforecast-go/internal/report"
 	"github.com/kviatkovsky/pvforecast-go/weather"
 )
 
@@ -87,53 +87,10 @@ func renderTable(w io.Writer, r *report) error {
 	return nil
 }
 
-type jsonPoint struct {
-	Time      time.Time `json:"time"`
-	POA       float64   `json:"poa_wm2"`
-	CellTempC float64   `json:"cell_temp_c"`
-	DCkW      float64   `json:"dc_kw"`
-	ACkW      float64   `json:"ac_kw"`
-	Clipped   bool      `json:"clipped,omitempty"`
-}
-
-type jsonReport struct {
-	System   string                 `json:"system"`
-	KWp      float64                `json:"kwp"`
-	Source   string                 `json:"source"`
-	Label    string                 `json:"label"`
-	Interval string                 `json:"interval"`
-	Model    string                 `json:"model"`
-	TimeZone string                 `json:"time_zone"`
-	Points   []jsonPoint            `json:"points"`
-	Daily    []forecast.DailyEnergy `json:"daily"`
-	TotalKWh float64                `json:"total_kwh"`
-	PeakACkW float64                `json:"peak_ac_kw"`
-}
-
 func renderJSON(w io.Writer, r *report) error {
-	out := jsonReport{
-		System: r.sys.Name, KWp: r.sys.DCkWp(), Source: r.res.Source,
-		Label: r.res.Label.String(), Interval: r.res.Interval.String(),
-		Model: r.opt.Transposition.String(), TimeZone: r.opt.Location.String(),
-		Points: make([]jsonPoint, len(r.res.Points)), Daily: make([]forecast.DailyEnergy, len(r.res.Daily)),
-		TotalKWh: r.res.TotalKWh, PeakACkW: r.res.PeakACkW,
-	}
-	for i, p := range r.res.Points {
-		out.Points[i] = jsonPoint{
-			Time: p.Time.In(r.opt.Location), POA: round(p.POA, 1), CellTempC: round(p.CellTempC, 2),
-			DCkW: round(p.DCkW, 4), ACkW: round(p.ACkW, 4), Clipped: p.Clipped,
-		}
-	}
-	// Every number is rounded to display precision: full-precision floats
-	// differ in the last bits between amd64 and arm64 (where the compiler
-	// fuses multiply-adds), which would make the output platform-dependent.
-	for i, d := range r.res.Daily {
-		out.Daily[i] = forecast.DailyEnergy{Date: d.Date, KWh: round(d.KWh, 3)}
-	}
-	out.TotalKWh, out.PeakACkW = round(out.TotalKWh, 3), round(out.PeakACkW, 4)
 	enc := json.NewEncoder(w)
 	enc.SetIndent("", "  ")
-	return enc.Encode(out)
+	return enc.Encode(rep.New(&r.sys, &r.opt, &r.res))
 }
 
 func renderCSV(w io.Writer, r *report) error {
@@ -158,9 +115,4 @@ func renderCSV(w io.Writer, r *report) error {
 	return cw.Error()
 }
 
-// round rounds to the given number of decimals for display; the library
-// keeps full precision.
-func round(v float64, decimals int) float64 {
-	p := math.Pow10(decimals)
-	return math.Round(v*p) / p
-}
+func round(v float64, decimals int) float64 { return rep.Round(v, decimals) }

@@ -1,4 +1,7 @@
-package main
+// Package config defines the JSON description of a PV system shared by the
+// pvforecast CLI (--config) and the HTTP API, and converts it into a
+// forecast.System.
+package config
 
 import (
 	"encoding/json"
@@ -13,16 +16,16 @@ import (
 	"github.com/kviatkovsky/pvforecast-go/thermal"
 )
 
-// fileConfig is the JSON configuration format. See examples/system.json.
-type fileConfig struct {
+// System is the JSON description of a PV system. See examples/system.json.
+type System struct {
 	Name      string            `json:"name"`
 	Lat       *float64          `json:"lat"`
 	Lon       *float64          `json:"lon"`
 	AltitudeM float64           `json:"altitude_m"`
 	Albedo    float64           `json:"albedo"`
 	Model     *irradiance.Model `json:"model"`
-	Arrays    []arrayConfig     `json:"arrays"`
-	Inverter  inverterConfig    `json:"inverter"`
+	Arrays    []Array           `json:"arrays"`
+	Inverter  Inverter          `json:"inverter"`
 	// Losses lists the PVWatts loss categories in percent; omitted
 	// categories are zero. If the whole object is omitted, the PVWatts
 	// defaults (14.08 %) apply.
@@ -31,7 +34,8 @@ type fileConfig struct {
 	LossesPct *float64 `json:"losses_pct"`
 }
 
-type arrayConfig struct {
+// Array is one orientation of modules.
+type Array struct {
 	Name       string  `json:"name"`
 	KWp        float64 `json:"kwp"`
 	TiltDeg    float64 `json:"tilt"`
@@ -41,36 +45,39 @@ type arrayConfig struct {
 	IAM        string  `json:"iam"`
 }
 
-type inverterConfig struct {
+// Inverter sets the inverter either by AC rating or by DC/AC ratio.
+type Inverter struct {
 	ACkW      float64 `json:"ac_kw"`
 	DCACRatio float64 `json:"dc_ac_ratio"`
 	EtaNom    float64 `json:"eta_nom"`
 }
 
-// loadConfig reads and decodes a configuration file, rejecting unknown
-// fields so that typos are reported instead of silently ignored.
-func loadConfig(path string) (fileConfig, error) {
-	f, err := os.Open(path) //nolint:gosec // reading the file the user named in --config is the intent
+// Load reads and decodes a configuration file.
+func Load(path string) (System, error) {
+	f, err := os.Open(path) //nolint:gosec // reading the file the user named is the intent
 	if err != nil {
-		return fileConfig{}, err
+		return System{}, err
 	}
 	defer func() { _ = f.Close() }()
-	return decodeConfig(f)
+	return Decode(f)
 }
 
-func decodeConfig(r io.Reader) (fileConfig, error) {
+// Decode decodes one JSON configuration, rejecting unknown fields so that
+// typos are reported instead of silently ignored.
+func Decode(r io.Reader) (System, error) {
 	dec := json.NewDecoder(r)
 	dec.DisallowUnknownFields()
-	var c fileConfig
+	var c System
 	if err := dec.Decode(&c); err != nil {
-		return fileConfig{}, fmt.Errorf("decode config: %w", err)
+		return System{}, fmt.Errorf("decode config: %w", err)
 	}
 	return c, nil
 }
 
-// system converts the configuration into a forecast.System. defaultDCAC
-// applies when the inverter specifies neither ac_kw nor dc_ac_ratio.
-func (c fileConfig) system(defaultDCAC float64) (forecast.System, error) {
+// Build converts the configuration into a forecast.System. defaultDCAC
+// applies when the inverter specifies neither ac_kw nor dc_ac_ratio. The
+// result still needs forecast.System.Validate.
+func (c System) Build(defaultDCAC float64) (forecast.System, error) {
 	if c.Lat == nil || c.Lon == nil {
 		return forecast.System{}, errors.New("config: lat and lon are required")
 	}
@@ -115,7 +122,7 @@ func (c fileConfig) system(defaultDCAC float64) (forecast.System, error) {
 	return sys, nil
 }
 
-func (c inverterConfig) inverter(dcKWp, defaultDCAC float64) (power.Inverter, error) {
+func (c Inverter) inverter(dcKWp, defaultDCAC float64) (power.Inverter, error) {
 	if c.ACkW != 0 && c.DCACRatio != 0 {
 		return power.Inverter{}, errors.New("config: inverter: set either ac_kw or dc_ac_ratio, not both")
 	}
