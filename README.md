@@ -84,10 +84,15 @@ unreachable), 2 usage error. `pvforecast version` prints the version.
 ## HTTP API
 
 `pvforecast-api` serves the same forecasts over HTTP, using only the standard
-library:
+library. Run the container image (multi-arch, distroless, non-root, about
+17 MB, signed with cosign) or build from source:
 
 ```bash
-go run ./cmd/pvforecast-api
+docker run --rm -p 8080:8080 ghcr.io/kviatkovsky/pvforecast-api:latest
+```
+
+```bash
+docker compose up --build        # or: go run ./cmd/pvforecast-api
 ```
 
 ```bash
@@ -121,6 +126,11 @@ Operational behavior (see [ADR 0007](docs/adr/0007-http-api.md)):
 - Timeouts per request and on the server, request IDs (`X-Request-ID`),
   structured JSON access logs, panic recovery and graceful shutdown on
   SIGTERM.
+- Container: `gcr.io/distroless/static` pinned by digest, UID 65532,
+  `HEALTHCHECK` via `pvforecast-api healthcheck` (the image has no shell
+  or curl), read-only root filesystem in `compose.yaml`; images for
+  linux/amd64 and linux/arm64 carry an SBOM attestation and a keyless
+  cosign signature (`cosign verify` command in each release).
 - Configuration through environment variables: `PORT`, `LOG_LEVEL`,
   `LOG_FORMAT`, `CACHE_TTL`, `CACHE_SIZE`, `MAX_IN_FLIGHT`,
   `REQUEST_TIMEOUT`, `OPENMETEO_URL`.
@@ -327,7 +337,7 @@ Run them with `make bench`; compare commits with
 - Bifacial irradiance (view-factor model)
 - DIRINT decomposition
 - More providers: Solcast, ECMWF open data
-- Container image and AWS Lambda deployment of the HTTP API
+- AWS Lambda deployment of the HTTP API (Terraform)
 - WebAssembly demo on GitHub Pages
 
 ## Contributing

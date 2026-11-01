@@ -1,0 +1,12 @@
+# syntax=docker/dockerfile:1
+# Used by GoReleaser (dockers_v2): it places the binary built for each
+# platform under $TARGETPLATFORM/ in the build context.
+FROM gcr.io/distroless/static-debian12:nonroot@sha256:afa5c872c891853ca7fcf1f12c3edb23f7eeef36189728842dd51042ff57f7ab
+ARG TARGETPLATFORM
+COPY $TARGETPLATFORM/pvforecast-api /pvforecast-api
+# 65532 is the distroless "nonroot" user; a numeric UID lets Kubernetes
+# verify runAsNonRoot.
+USER 65532:65532
+EXPOSE 8080
+HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 CMD ["/pvforecast-api", "healthcheck"]
+ENTRYPOINT ["/pvforecast-api"]

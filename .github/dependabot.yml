@@ -16,3 +16,10 @@ updates:
         patterns: ["*"]
     commit-message:
       prefix: "ci(deps)"
+
+  - package-ecosystem: docker
+    directories: ["/"]
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: "build(docker)"
