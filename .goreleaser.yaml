@@ -22,8 +22,22 @@ builds:
     # Reproducible builds: file times come from the commit, not the clock.
     mod_timestamp: "{{ .CommitTimestamp }}"
 
+  - id: pvforecast-api
+    main: ./cmd/pvforecast-api
+    binary: pvforecast-api
+    env:
+      - CGO_ENABLED=0
+    goos: [linux, darwin, windows]
+    goarch: [amd64, arm64]
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w -X main.version={{ .Version }}
+    mod_timestamp: "{{ .CommitTimestamp }}"
+
 archives:
-  - formats: [tar.gz]
+  - ids: [pvforecast, pvforecast-api]
+    formats: [tar.gz]
     format_overrides:
       - goos: windows
         formats: [zip]
@@ -38,6 +52,39 @@ checksum:
 
 sboms:
   - artifacts: archive
+
+# Multi-platform image of the HTTP API, pushed to GitHub Container Registry
+# with an SBOM attestation.
+dockers_v2:
+  - id: pvforecast-api
+    ids: [pvforecast-api]
+    dockerfile: Dockerfile.release
+    images:
+      - ghcr.io/kviatkovsky/pvforecast-api
+    tags:
+      - "{{ .Version }}"
+      - "{{ .Major }}.{{ .Minor }}"
+      - latest
+    platforms:
+      - linux/amd64
+      - linux/arm64
+    sbom: true
+    labels:
+      org.opencontainers.image.title: pvforecast-api
+      org.opencontainers.image.description: Physics-based PV power forecasts over HTTP
+      org.opencontainers.image.source: "{{ .GitURL }}"
+      org.opencontainers.image.version: "{{ .Version }}"
+      org.opencontainers.image.revision: "{{ .FullCommit }}"
+      org.opencontainers.image.created: "{{ .CommitDate }}"
+      org.opencontainers.image.licenses: MIT
+
+# Keyless signing of the image by digest with the workflow's OIDC identity.
+docker_signs:
+  - cmd: cosign
+    args:
+      - sign
+      - ${artifact}@${digest}
+      - --yes
 
 # Keyless signing with Sigstore: the checksum file is signed with the
 # workflow's OIDC identity, which covers every archive it lists.
@@ -75,6 +122,16 @@ changelog:
 release:
   prerelease: auto
   footer: |
+    Container image: `ghcr.io/kviatkovsky/pvforecast-api:{{ .Version }}`
+
+    Verify the image signature with:
+
+    ```bash
+    cosign verify ghcr.io/kviatkovsky/pvforecast-api:{{ .Version }} \
+      --certificate-identity-regexp 'https://github.com/kviatkovsky/pvforecast-go/.github/workflows/release.yml@refs/tags/v.*' \
+      --certificate-oidc-issuer https://token.actions.githubusercontent.com
+    ```
+
     Verify the checksums signature with:
 
     ```bash

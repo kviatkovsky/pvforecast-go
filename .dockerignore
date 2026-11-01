@@ -1,0 +1,12 @@
+# Only what the Go build needs.
+.git
+.github
+bin
+dist
+docs
+tools
+internal/testdata
+**/testdata
+**/*_test.go
+*.md
+!README.md

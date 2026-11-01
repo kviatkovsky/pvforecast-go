@@ -1,0 +1,15 @@
+# Local run of the HTTP API: docker compose up --build
+services:
+  api:
+    build: .
+    image: pvforecast-api:local
+    ports:
+      - "8080:8080"
+    environment:
+      LOG_FORMAT: text
+      CACHE_TTL: 15m
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]
+    restart: unless-stopped

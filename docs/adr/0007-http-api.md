@@ -36,6 +36,14 @@ and it calls a free weather API that must not be overloaded.
   dependencies and the same binary serves locally, in a container and on
   Lambda.
 
+- **Container image.** Release images are built by GoReleaser from the same
+  binaries as the archives (`Dockerfile.release`), for linux/amd64 and
+  linux/arm64, on `gcr.io/distroless/static` pinned by digest and kept
+  current by Dependabot. They run as UID 65532, carry an SBOM attestation
+  and are signed keylessly with cosign. `Dockerfile` builds the same image
+  from source for local use. Because the base has no shell, the binary has
+  a `healthcheck` subcommand for Docker's `HEALTHCHECK`.
+
 ## Consequences
 
 The in-memory cache is per instance; on Lambda it lives as long as the

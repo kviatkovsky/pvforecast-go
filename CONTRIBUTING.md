@@ -54,6 +54,8 @@ Significant design or modelling decisions are recorded as ADRs in
 
 Releases are cut by pushing a `v*` tag on `main`. The `Release` workflow runs
 the tests, then GoReleaser builds the binaries, archives, SBOMs and the
-signed checksum file, and publishes the GitHub release with a changelog
-grouped by Conventional Commit type. Check the configuration locally with
+signed checksum file, pushes the multi-arch API image to
+`ghcr.io/kviatkovsky/pvforecast-api` (signed, with an SBOM attestation),
+and publishes the GitHub release with a changelog grouped by Conventional
+Commit type. Check the configuration locally with
 `goreleaser check` and `goreleaser build --snapshot --clean`.

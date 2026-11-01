@@ -26,6 +26,14 @@ build: ## Build bin/pvforecast and bin/pvforecast-api with the version stamped i
 	$(GO) build -trimpath -ldflags '-s -w -X main.version=$(VERSION)' -o bin/pvforecast ./cmd/pvforecast
 	$(GO) build -trimpath -ldflags '-s -w -X main.version=$(VERSION)' -o bin/pvforecast-api ./cmd/pvforecast-api
 
+.PHONY: docker
+docker: ## Build the API container image from source (pvforecast-api:local).
+	docker build --build-arg VERSION=$(VERSION) -t pvforecast-api:local .
+
+.PHONY: docker-run
+docker-run: docker ## Run the API container on :8080.
+	docker run --rm -p 8080:8080 -e LOG_FORMAT=text pvforecast-api:local
+
 .PHONY: serve
 serve: build ## Run the HTTP API on :8080 with text logs.
 	LOG_FORMAT=text ./bin/pvforecast-api
