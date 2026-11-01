@@ -11,6 +11,7 @@ FUZZTIME        ?= 30s
 PYTHON          ?= python3
 # package:FuzzTarget pairs run by `make fuzz`.
 FUZZ_TARGETS    := ./solarpos:FuzzPosition ./irradiance:FuzzTranspose
+OPENMETEO_URL   := https://api.open-meteo.com/v1/forecast?latitude=50.0647&longitude=19.945&hourly=shortwave_radiation,direct_normal_irradiance,diffuse_radiation,temperature_2m,wind_speed_10m&wind_speed_unit=ms&timezone=UTC&forecast_days=3
 
 .DEFAULT_GOAL := help
 
@@ -18,9 +19,11 @@ FUZZ_TARGETS    := ./solarpos:FuzzPosition ./irradiance:FuzzTranspose
 help: ## Show this help.
 	@awk 'BEGIN {FS = ":.*##"} /^[a-zA-Z_-]+:.*##/ {printf "  \033[36m%-10s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
+VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
+
 .PHONY: build
-build: ## Compile all packages.
-	$(GO) build $(PKGS)
+build: ## Build bin/pvforecast with the version stamped in.
+	$(GO) build -trimpath -ldflags '-s -w -X main.version=$(VERSION)' -o bin/pvforecast ./cmd/pvforecast
 
 .PHONY: test
 test: ## Run unit tests.
@@ -50,6 +53,10 @@ fuzz: ## Run every fuzz target for FUZZTIME each.
 .PHONY: fixtures
 fixtures: ## Regenerate pvlib reference fixtures (needs Python 3 and tools/fixtures/requirements.txt).
 	$(PYTHON) -I tools/fixtures/gen.py --out internal/testdata
+
+.PHONY: record
+record: ## Record a live Open-Meteo response for Kraków (needs network access).
+	curl -fsS '$(OPENMETEO_URL)' -o internal/testdata/openmeteo/recorded_krakow.json
 
 .PHONY: lint
 lint: ## Run golangci-lint (linters and formatters).

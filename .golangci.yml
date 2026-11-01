@@ -40,10 +40,11 @@ linters:
         - paramTypeCombine
       settings:
         hugeParam:
-          # Physics inputs are small value types passed by value on purpose:
-          # functions stay pure and can sanitize their own copy. Copying
-          # under 128 bytes costs about a nanosecond.
-          sizeThreshold: 128
+          # Physics inputs and configuration (System, Options) are value
+          # types passed by value on purpose: functions stay pure, can
+          # sanitize their own copy and cannot mutate the caller's. They are
+          # copied at most once per call, which costs nanoseconds.
+          sizeThreshold: 256
     govet:
       enable-all: true
       disable:
@@ -81,8 +82,11 @@ linters:
     rules:
       # Reference values in tests are compared with explicit tolerances and
       # generated inputs are deterministic; these checks only add noise there.
+      # Tests build fake *http.Response values for in-memory transports;
+      # the client under test closes their bodies.
       - path: _test\.go
         linters:
+          - bodyclose
           - gosec
           - perfsprint
 

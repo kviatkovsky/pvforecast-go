@@ -37,9 +37,12 @@ var (
 
 var modelNames = [...]string{Isotropic: "isotropic", HayDavies: "haydavies", Perez: "perez"}
 
+// Valid reports whether m is one of the defined models.
+func (m Model) Valid() bool { return m >= 0 && int(m) < len(modelNames) }
+
 // String returns the lower-case model name.
 func (m Model) String() string {
-	if m < 0 || int(m) >= len(modelNames) {
+	if !m.Valid() {
 		return fmt.Sprintf("Model(%d)", int(m))
 	}
 	return modelNames[m]
@@ -59,7 +62,7 @@ func ParseModel(s string) (Model, error) {
 
 // MarshalText implements encoding.TextMarshaler.
 func (m Model) MarshalText() ([]byte, error) {
-	if m < 0 || int(m) >= len(modelNames) {
+	if !m.Valid() {
 		return nil, fmt.Errorf("%w: %d", ErrUnknownModel, int(m))
 	}
 	return []byte(modelNames[m]), nil
@@ -128,7 +131,7 @@ type POA struct {
 //
 // Transpose does not allocate.
 func Transpose(m Model, in Input) (POA, error) {
-	if m < 0 || int(m) >= len(modelNames) {
+	if !m.Valid() {
 		return POA{}, fmt.Errorf("%w: %d", ErrUnknownModel, int(m))
 	}
 	if m != Isotropic && !(in.DNIExtra > 0) {

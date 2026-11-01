@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import json
 import math
 from pathlib import Path
 
@@ -198,6 +199,213 @@ def erbs(out: Path) -> int:
     return rows
 
 
+def thermal(out: Path) -> int:
+    poas = [0.0, 50.0, 200.0, 500.0, 800.0, 1000.0, 1200.0]
+    temps = [-20.0, 0.0, 15.0, 30.0, 45.0]
+    winds = [0.0, 0.5, 2.0, 5.0, 10.0, 20.0]
+    sapm = pvlib.temperature.TEMPERATURE_MODEL_PARAMETERS["sapm"]
+    rows = 0
+    with out.open("w", newline="") as f:
+        w = csv.writer(f, lineterminator="\n")
+        w.writerow(["model", "poa", "temp_air", "wind", "cell_temp"])
+        for e in poas:
+            for ta in temps:
+                for ws in winds:
+                    tc = pvlib.temperature.faiman(e, ta, ws, u0=25.0, u1=6.84)
+                    w.writerow(["faiman", e, ta, ws, _fmt(float(tc))])
+                    rows += 1
+                    for name, p in sapm.items():
+                        tc = pvlib.temperature.sapm_cell(e, ta, ws, **p)
+                        w.writerow([f"sapm_{name}", e, ta, ws, _fmt(float(tc))])
+                        rows += 1
+    return rows
+
+
+def power(out_dir: Path) -> dict[str, int]:
+    counts = {}
+    with (out_dir / "power_dc.csv").open("w", newline="") as f:
+        w = csv.writer(f, lineterminator="\n")
+        w.writerow(["geff", "temp_cell", "pdc0", "gamma", "pdc"])
+        n = 0
+        for g in [0.0, 1.0, 50.0, 200.0, 600.0, 1000.0, 1250.0]:
+            for tc in [-25.0, 0.0, 25.0, 45.0, 70.0]:
+                for gamma in [-0.0035, -0.004, -0.005]:
+                    pdc = pvlib.pvsystem.pvwatts_dc(g, tc, 10000.0, gamma)
+                    w.writerow([g, tc, 10000.0, gamma, _fmt(float(pdc))])
+                    n += 1
+        counts["power_dc.csv"] = n
+    with (out_dir / "power_inverter.csv").open("w", newline="") as f:
+        w = csv.writer(f, lineterminator="\n")
+        w.writerow(["pdc", "pdc0", "eta_nom", "eta_ref", "pac"])
+        pdc0 = 10000.0 / 0.96
+        n = 0
+        for frac in np.concatenate([[0.0, 0.001, 0.003, 0.005, 0.01, 0.02],
+                                    np.linspace(0.05, 1.4, 28)]):
+            pdc = frac * pdc0
+            pac = pvlib.inverter.pvwatts(pdc, pdc0)
+            w.writerow([_fmt(pdc), _fmt(pdc0), 0.96, 0.9637, _fmt(float(pac))])
+            n += 1
+        counts["power_inverter.csv"] = n
+    with (out_dir / "power_iam.csv").open("w", newline="") as f:
+        w = csv.writer(f, lineterminator="\n")
+        w.writerow(["aoi", "physical", "ashrae"])
+        aois = np.concatenate([np.arange(0, 90, 2.5), [87.5, 89.0, 89.9, 90.0, 95.0]])
+        phys = np.asarray(pvlib.iam.physical(aois))
+        ash = np.asarray(pvlib.iam.ashrae(aois))
+        for a, p, s in zip(aois, phys, ash):
+            w.writerow([_fmt(a), _fmt(p), _fmt(s)])
+        counts["power_iam.csv"] = len(aois)
+    with (out_dir / "power_losses.csv").open("w", newline="") as f:
+        w = csv.writer(f, lineterminator="\n")
+        w.writerow(["soiling", "shading", "snow", "mismatch", "wiring",
+                    "connections", "lid", "nameplate", "age", "availability",
+                    "total"])
+        cases = [
+            {},
+            dict(soiling=0, shading=0, snow=0, mismatch=0, wiring=0,
+                 connections=0, lid=0, nameplate_rating=0, age=0,
+                 availability=0),
+            dict(soiling=5, shading=10, snow=8, age=5),
+        ]
+        keys = ["soiling", "shading", "snow", "mismatch", "wiring",
+                "connections", "lid", "nameplate_rating", "age",
+                "availability"]
+        defaults = dict(soiling=2, shading=3, snow=0, mismatch=2, wiring=2,
+                        connections=0.5, lid=1.5, nameplate_rating=1, age=0,
+                        availability=3)
+        for c in cases:
+            p = {**defaults, **c}
+            total = pvlib.pvsystem.pvwatts_losses(**p)
+            w.writerow([p[k] for k in keys] + [_fmt(float(total))])
+        counts["power_losses.csv"] = len(cases)
+    return counts
+
+
+def openmeteo(out_dir: Path) -> list[str]:
+    """Synthetic responses in the Open-Meteo forecast format.
+
+    These are NOT recorded API responses: values are pvlib clear-sky
+    irradiance for Krakow with a simple diurnal temperature and wind
+    pattern, so that tests are deterministic and need no network. Use
+    `make record` to capture a real response.
+    """
+    lat, lon, alt = 50.0647, 19.9450, 219.0
+    start = pd.Timestamp("2026-06-20T00:00Z")
+    times = pd.date_range(start, periods=72, freq="1h")
+    # Interval-end hourly means are approximated at the interval midpoint.
+    mid = times - pd.Timedelta(minutes=30)
+    loc = pvlib.location.Location(lat, lon, altitude=alt)
+    written = []
+    for kind, eval_times in (("averaged", mid), ("instant", times)):
+        sp = loc.get_solarposition(eval_times)
+        cs = loc.get_clearsky(eval_times, model="haurwitz", solar_position=sp)
+        dec = pvlib.irradiance.erbs(cs["ghi"], sp["apparent_zenith"], eval_times)
+        hours = np.asarray(eval_times.hour + eval_times.minute / 60.0)
+        temp = 18 + 7 * np.sin((hours - 9) / 24 * 2 * np.pi)
+        wind = 2.5 + 1.5 * np.sin((hours - 12) / 24 * 2 * np.pi)
+        suffix = "_instant" if kind == "instant" else ""
+        cols = {
+            f"shortwave_radiation{suffix}": np.asarray(cs["ghi"]),
+            f"direct_normal_irradiance{suffix}": np.asarray(dec["dni"]),
+            f"diffuse_radiation{suffix}": np.asarray(dec["dhi"]),
+            "temperature_2m": temp,
+            "wind_speed_10m": wind,
+        }
+        hourly = {"time": [t.strftime("%Y-%m-%dT%H:%M") for t in times]}
+        for k, v in cols.items():
+            vals = [round(float(x), 1) for x in v]
+            # The API returns null past the end of a model's horizon.
+            vals[-3:] = [None, None, None]
+            hourly[k] = vals
+        doc = {
+            "latitude": 50.06,
+            "longitude": 19.94,
+            "generationtime_ms": 0.1,
+            "utc_offset_seconds": 0,
+            "timezone": "UTC",
+            "timezone_abbreviation": "GMT",
+            "elevation": alt,
+            "hourly_units": {"time": "iso8601", **{
+                k: ("°C" if k.startswith("temp") else
+                    "m/s" if k.startswith("wind") else "W/m²")
+                for k in cols}},
+            "hourly": hourly,
+        }
+        name = f"forecast_{kind}.json"
+        (out_dir / name).write_text(
+            json.dumps(doc, ensure_ascii=False, indent=1) + "\n")
+        written.append(name)
+    return written
+
+
+def pipeline(out: Path, om_dir: Path) -> int:
+    """End-to-end reference: the whole PVWatts chain built from pvlib
+    functions, fed with the synthetic Open-Meteo series.
+
+    Each hourly mean is evaluated at its interval midpoint, matching the
+    Go convention for interval-end labels. Night-time Perez NaN (DHI = 0)
+    is reported as zero, as in the Go code (ADR 0004).
+    """
+    doc = json.loads((om_dir / "forecast_averaged.json").read_text())
+    h = doc["hourly"]
+    keep = [i for i, v in enumerate(h["shortwave_radiation"]) if v is not None]
+    label = pd.DatetimeIndex([h["time"][i] for i in keep], tz="UTC")
+    mid = label - pd.Timedelta(minutes=30)
+    w = pd.DataFrame({
+        "ghi": [h["shortwave_radiation"][i] for i in keep],
+        "dni": [h["direct_normal_irradiance"][i] for i in keep],
+        "dhi": [h["diffuse_radiation"][i] for i in keep],
+        "temp_air": [h["temperature_2m"][i] for i in keep],
+        "wind_speed": [h["wind_speed_10m"][i] for i in keep],
+    }, index=mid)
+
+    lat, lon, alt = 50.0647, 19.9450, 219.0
+    sp = pvlib.solarposition.spa_python(
+        mid, lat, lon, altitude=alt, pressure=standard_pressure(alt),
+        temperature=12.0, delta_t=DELTA_T, how="numpy")
+    dist = pvlib.solarposition.nrel_earthsun_distance(mid, delta_t=DELTA_T)
+    dni_extra = 1361.0 / dist ** 2
+    airmass = pvlib.atmosphere.get_relative_airmass(sp["apparent_zenith"])
+    losses = pvlib.pvsystem.pvwatts_losses()
+    sapm = pvlib.temperature.TEMPERATURE_MODEL_PARAMETERS["sapm"]["open_rack_glass_polymer"]
+
+    systems = {
+        # name: (model, inverter AC kW, [(kWp, tilt, azimuth)])
+        "south": ("perez", 10.0 / 1.1, [(10.0, 35.0, 180.0)]),
+        "eastwest": ("haydavies", 9.0, [(6.0, 15.0, 90.0), (6.0, 15.0, 270.0)]),
+    }
+    rows = 0
+    with out.open("w", newline="") as f:
+        wr = csv.writer(f, lineterminator="\n")
+        wr.writerow(["system", "time", "poa", "cell_temp", "dc_kw", "ac_kw"])
+        for name, (model, ac_kw, arrays) in systems.items():
+            pdc_total = 0.0
+            poa_w = 0.0
+            tc_w = 0.0
+            kwp_total = sum(a[0] for a in arrays)
+            for kwp, tilt, az in arrays:
+                irr = pvlib.irradiance.get_total_irradiance(
+                    tilt, az, sp["apparent_zenith"], sp["azimuth"],
+                    w["dni"], w["ghi"], w["dhi"], dni_extra=dni_extra,
+                    airmass=airmass, albedo=0.25, model=model)
+                irr = irr.fillna(0.0)
+                aoi = pvlib.irradiance.aoi(tilt, az, sp["apparent_zenith"], sp["azimuth"])
+                iam = pvlib.iam.physical(aoi)
+                geff = irr["poa_direct"] * iam + irr["poa_diffuse"]
+                tc = pvlib.temperature.sapm_cell(
+                    irr["poa_global"], w["temp_air"], w["wind_speed"], **sapm)
+                pdc_total = pdc_total + pvlib.pvsystem.pvwatts_dc(geff, tc, kwp * 1000, -0.004)
+                poa_w = poa_w + irr["poa_global"] * kwp
+                tc_w = tc_w + tc * kwp
+            pdc = pdc_total * (1 - losses / 100)
+            pac = pvlib.inverter.pvwatts(pdc, ac_kw * 1000 / 0.96)
+            for t, p, c, d, a in zip(label, poa_w / kwp_total, tc_w / kwp_total, pdc, pac):
+                wr.writerow([name, t.strftime("%Y-%m-%dT%H:%M:%SZ"), _fmt(p),
+                             _fmt(c), _fmt(d / 1000), _fmt(a / 1000)])
+                rows += 1
+    return rows
+
+
 def main() -> None:
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--out", type=Path, default=Path("internal/testdata"))
@@ -208,6 +416,14 @@ def main() -> None:
     print(f"  irradiance_transposition.csv: {transposition(args.out / 'irradiance_transposition.csv')} rows")
     print(f"  irradiance_airmass.csv:     {airmass(args.out / 'irradiance_airmass.csv')} rows")
     print(f"  irradiance_erbs.csv:        {erbs(args.out / 'irradiance_erbs.csv')} rows")
+    print(f"  thermal.csv:                {thermal(args.out / 'thermal.csv')} rows")
+    for name, n in power(args.out).items():
+        print(f"  {name + ':':28s}{n} rows")
+    om = args.out / "openmeteo"
+    om.mkdir(exist_ok=True)
+    for name in openmeteo(om):
+        print(f"  openmeteo/{name} (synthetic)")
+    print(f"  forecast_pipeline.csv:      {pipeline(args.out / 'forecast_pipeline.csv', om)} rows")
 
 
 if __name__ == "__main__":

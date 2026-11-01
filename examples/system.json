@@ -1,0 +1,17 @@
+{
+  "name": "Warehouse roof, Kraków",
+  "lat": 50.0647,
+  "lon": 19.9450,
+  "altitude_m": 219,
+  "albedo": 0.2,
+  "model": "perez",
+  "arrays": [
+    {"name": "east", "kwp": 24, "tilt": 12, "azimuth": 90, "thermal": "sapm_close_mount_glass_glass"},
+    {"name": "west", "kwp": 24, "tilt": 12, "azimuth": 270, "thermal": "sapm_close_mount_glass_glass"}
+  ],
+  "inverter": {"dc_ac_ratio": 1.2},
+  "losses": {
+    "soiling": 2, "shading": 1, "mismatch": 2, "wiring": 2,
+    "connections": 0.5, "lid": 1.5, "nameplate": 1, "availability": 3
+  }
+}
