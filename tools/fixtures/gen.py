@@ -12,6 +12,7 @@ import csv
 import math
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 import pvlib
 
@@ -83,13 +84,130 @@ def solarpos(out: Path) -> int:
     return rows
 
 
+def _fmt(v: float, decimals: int = 8) -> str:
+    return "NaN" if not math.isfinite(v) else f"{v:.{decimals}f}"
+
+
+def irradiance_sun_samples() -> pd.DataFrame:
+    """Daytime solar positions, with dense sampling near the horizon."""
+    frames = []
+    hourly = pd.date_range(f"{YEAR}-01-01T00:30:00Z", periods=8760, freq="1h")
+    for name, lat, lon, alt, _ in LOCATIONS[:5]:
+        sp = pvlib.solarposition.spa_python(
+            hourly, lat, lon, altitude=alt, delta_t=DELTA_T, how="numpy"
+        )
+        z = sp["apparent_zenith"]
+        idx = np.arange(len(z))
+        keep = (z < 90) & (((idx % 11) == 0) | ((z > 80) & (idx % 3 == 0)))
+        sp = sp[keep]
+        frames.append(pd.DataFrame({
+            "time": sp.index,
+            "zenith": sp["apparent_zenith"].to_numpy(),
+            "sun_azimuth": sp["azimuth"].to_numpy(),
+        }))
+    return pd.concat(frames, ignore_index=True)
+
+
+def transposition(out: Path) -> int:
+    sun = irradiance_sun_samples()
+    tilts = [0.0, 10.0, 20.0, 35.0, 60.0, 90.0]
+    azimuths = [180.0, 90.0, 270.0, 0.0, 135.0]
+    cloud = [1.0, 0.7, 0.35, 0.1]
+    albedos = [0.25, 0.2, 0.6]
+    n = len(sun)
+    i = np.arange(n)
+    tilt = np.array(tilts)[i % len(tilts)]
+    surf_az = np.array(azimuths)[(i // len(tilts)) % len(azimuths)]
+    k = np.array(cloud)[(i // 7) % len(cloud)]
+    albedo = np.array(albedos)[(i // 3) % len(albedos)]
+    zen = sun["zenith"].to_numpy()
+    sun_az = sun["sun_azimuth"].to_numpy()
+    times = pd.DatetimeIndex(sun["time"])
+
+    dni_extra = pvlib.irradiance.get_extra_radiation(times).to_numpy()
+    ghi = pvlib.clearsky.haurwitz(pd.Series(zen))["ghi"].to_numpy() * k
+    dec = pvlib.irradiance.erbs(ghi, zen, times)
+    dni, dhi = np.asarray(dec["dni"]), np.asarray(dec["dhi"])
+    airmass = np.asarray(pvlib.atmosphere.get_relative_airmass(zen))
+
+    ir = pvlib.irradiance
+    aoi = ir.aoi(tilt, surf_az, zen, sun_az)
+    beam = ir.beam_component(tilt, surf_az, zen, sun_az, dni)
+    iso = ir.isotropic(tilt, dhi)
+    hd = ir.haydavies(tilt, surf_az, dhi, dni, dni_extra, zen, sun_az,
+                      return_components=True)
+    pz = ir.perez(tilt, surf_az, dhi, dni, dni_extra, zen, sun_az, airmass,
+                  return_components=True)
+    ground = ir.get_ground_diffuse(tilt, ghi, albedo=albedo)
+
+    cols = {
+        "tilt": tilt, "surface_azimuth": surf_az, "zenith": zen,
+        "sun_azimuth": sun_az, "ghi": ghi, "dni": dni, "dhi": dhi,
+        "dni_extra": dni_extra, "airmass": airmass, "albedo": albedo,
+        "aoi": aoi, "beam": beam, "isotropic": iso,
+        "haydavies": hd["poa_sky_diffuse"],
+        "haydavies_isotropic": hd["poa_isotropic"],
+        "haydavies_circumsolar": hd["poa_circumsolar"],
+        "perez": pz["poa_sky_diffuse"],
+        "perez_isotropic": pz["poa_isotropic"],
+        "perez_circumsolar": pz["poa_circumsolar"],
+        "perez_horizon": pz["poa_horizon"],
+        "ground": ground,
+    }
+    cols = {key: np.asarray(v, dtype=float) for key, v in cols.items()}
+    # pvlib returns NaN for Perez when DHI is zero; the Go code returns zero
+    # by design and tests that case separately.
+    keep = cols["dhi"] > 0
+    with out.open("w", newline="") as f:
+        w = csv.writer(f, lineterminator="\n")
+        w.writerow(cols.keys())
+        for r in range(n):
+            if keep[r]:
+                w.writerow(_fmt(cols[key][r]) for key in cols)
+    return int(keep.sum())
+
+
+def airmass(out: Path) -> int:
+    zen = np.concatenate([np.arange(0, 90, 0.5), [89.5, 89.9, 90.0, 90.5, 120.0]])
+    am = np.asarray(pvlib.atmosphere.get_relative_airmass(zen))
+    with out.open("w", newline="") as f:
+        w = csv.writer(f, lineterminator="\n")
+        w.writerow(["zenith", "airmass"])
+        for z, a in zip(zen, am):
+            w.writerow([_fmt(z), _fmt(a)])
+    return len(zen)
+
+
+def erbs(out: Path) -> int:
+    rows = 0
+    doys = [1, 80, 172, 266, 355]
+    ghis = [0.0, 5.0, 50.0, 150.0, 300.0, 500.0, 700.0, 900.0, 1100.0, 1300.0]
+    zens = [0.0, 15.0, 30.0, 45.0, 60.0, 75.0, 85.0, 86.9, 87.1, 89.5, 95.0]
+    with out.open("w", newline="") as f:
+        w = csv.writer(f, lineterminator="\n")
+        w.writerow(["ghi", "zenith", "dni_extra", "dni", "dhi", "kt"])
+        for doy in doys:
+            extra = float(pvlib.irradiance.get_extra_radiation(doy))
+            for g in ghis:
+                for z in zens:
+                    r = pvlib.irradiance.erbs(g, z, doy)
+                    w.writerow([_fmt(g), _fmt(z), _fmt(extra),
+                                _fmt(float(r["dni"])), _fmt(float(r["dhi"])),
+                                _fmt(float(r["kt"]))])
+                    rows += 1
+    return rows
+
+
 def main() -> None:
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--out", type=Path, default=Path("internal/testdata"))
     args = p.parse_args()
     args.out.mkdir(parents=True, exist_ok=True)
-    n = solarpos(args.out / "solarpos_spa.csv")
-    print(f"pvlib {pvlib.__version__}: wrote {n} solar position rows")
+    print(f"pvlib {pvlib.__version__}")
+    print(f"  solarpos_spa.csv:           {solarpos(args.out / 'solarpos_spa.csv')} rows")
+    print(f"  irradiance_transposition.csv: {transposition(args.out / 'irradiance_transposition.csv')} rows")
+    print(f"  irradiance_airmass.csv:     {airmass(args.out / 'irradiance_airmass.csv')} rows")
+    print(f"  irradiance_erbs.csv:        {erbs(args.out / 'irradiance_erbs.csv')} rows")
 
 
 if __name__ == "__main__":

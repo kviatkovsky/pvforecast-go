@@ -10,7 +10,7 @@ BENCH_COUNT     ?= 6
 FUZZTIME        ?= 30s
 PYTHON          ?= python3
 # package:FuzzTarget pairs run by `make fuzz`.
-FUZZ_TARGETS    := ./solarpos:FuzzPosition
+FUZZ_TARGETS    := ./solarpos:FuzzPosition ./irradiance:FuzzTranspose
 
 .DEFAULT_GOAL := help
 
