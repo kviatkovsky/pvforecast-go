@@ -1,0 +1,10 @@
+# Copy to terraform.tfvars and adjust. Never put credentials here: Terraform
+# uses the standard AWS credential chain (AWS_PROFILE, SSO, environment).
+region       = "eu-central-1"
+budget_email = "you@example.com"
+
+# Cap concurrency once your account limit allows it (new accounts: leave null).
+# reserved_concurrency = 5
+
+# Set to false if the account already has the GitHub OIDC provider.
+# create_github_oidc_provider = false

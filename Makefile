@@ -34,6 +34,29 @@ docker: ## Build the API container image from source (pvforecast-api:local).
 docker-run: docker ## Run the API container on :8080.
 	docker run --rm -p 8080:8080 -e LOG_FORMAT=text pvforecast-api:local
 
+LAMBDA_DIR      := deploy/aws
+LAMBDA_FUNCTION ?= pvforecast-api
+
+.PHONY: lambda-zip
+lambda-zip: ## Build deploy/aws/build/bootstrap.zip (linux/arm64) for AWS Lambda.
+	rm -rf $(LAMBDA_DIR)/build && mkdir -p $(LAMBDA_DIR)/build
+	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 $(GO) build -trimpath \
+		-ldflags '-s -w -X main.version=$(VERSION)' -o $(LAMBDA_DIR)/build/bootstrap ./cmd/pvforecast-api
+	cd $(LAMBDA_DIR)/build && zip -q -X bootstrap.zip bootstrap
+
+.PHONY: lambda-deploy
+lambda-deploy: lambda-zip ## Upload new code to the Lambda function (uses your AWS credentials).
+	aws lambda update-function-code --function-name $(LAMBDA_FUNCTION) \
+		--zip-file fileb://$(LAMBDA_DIR)/build/bootstrap.zip --output text --query 'LastUpdateStatus'
+	aws lambda wait function-updated-v2 --function-name $(LAMBDA_FUNCTION)
+
+.PHONY: tf-check
+tf-check: ## Check Terraform formatting, validity and lint (no AWS credentials needed).
+	terraform -chdir=$(LAMBDA_DIR) fmt -check -recursive
+	terraform -chdir=$(LAMBDA_DIR) init -backend=false -input=false >/dev/null
+	terraform -chdir=$(LAMBDA_DIR) validate
+	cd $(LAMBDA_DIR) && tflint
+
 .PHONY: serve
 serve: build ## Run the HTTP API on :8080 with text logs.
 	LOG_FORMAT=text ./bin/pvforecast-api

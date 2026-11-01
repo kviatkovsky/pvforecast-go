@@ -14,8 +14,10 @@ cd pvforecast-go
 make check
 ```
 
-`make check` runs what CI runs: `go mod tidy -diff`, `go vet`, `golangci-lint`
-and the tests with the race detector. Run `make help` for all targets.
+`make check` runs what CI runs for the Go code: `go mod tidy -diff`,
+`go vet`, `golangci-lint` and the tests with the race detector. `make tf-check`
+checks the Terraform module in `deploy/aws` (needs `terraform` and `tflint`,
+no AWS credentials). Run `make help` for all targets.
 
 Install [golangci-lint](https://golangci-lint.run/welcome/install/) v2.15.0 or
 newer as a standalone binary.
