@@ -22,8 +22,13 @@ help: ## Show this help.
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 
 .PHONY: build
-build: ## Build bin/pvforecast with the version stamped in.
+build: ## Build bin/pvforecast and bin/pvforecast-api with the version stamped in.
 	$(GO) build -trimpath -ldflags '-s -w -X main.version=$(VERSION)' -o bin/pvforecast ./cmd/pvforecast
+	$(GO) build -trimpath -ldflags '-s -w -X main.version=$(VERSION)' -o bin/pvforecast-api ./cmd/pvforecast-api
+
+.PHONY: serve
+serve: build ## Run the HTTP API on :8080 with text logs.
+	LOG_FORMAT=text ./bin/pvforecast-api
 
 .PHONY: test
 test: ## Run unit tests.

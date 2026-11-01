@@ -1,0 +1,207 @@
+openapi: 3.1.0
+info:
+  title: pvforecast API
+  version: "1"
+  summary: Physics-based PV power forecasts.
+  description: |
+    Hourly AC power and daily energy forecasts for photovoltaic systems,
+    computed with NREL SPA, Perez/Hay-Davies transposition and PVWatts v5
+    from the Open-Meteo weather forecast.
+
+    Times in responses are in the requested time zone. Hourly means are
+    labeled at the end of their hour (`label: interval-end`): the point at
+    12:00 covers 11:00–12:00.
+
+    Weather data by Open-Meteo.com (CC BY 4.0).
+  license:
+    name: MIT
+    identifier: MIT
+servers:
+  - url: http://localhost:8080
+paths:
+  /v1/forecast:
+    get:
+      summary: Forecast for a single-array system
+      operationId: getForecast
+      parameters:
+        - {name: lat, in: query, required: true, schema: {type: number, minimum: -90, maximum: 90}, description: Latitude, degrees north}
+        - {name: lon, in: query, required: true, schema: {type: number, minimum: -180, maximum: 180}, description: Longitude, degrees east}
+        - {name: kwp, in: query, required: true, schema: {type: number, exclusiveMinimum: 0}, description: DC nameplate power, kWp}
+        - {name: tilt, in: query, schema: {type: number, minimum: 0, maximum: 90, default: 35}, description: Tilt, degrees from horizontal}
+        - {name: azimuth, in: query, schema: {type: number, minimum: 0, maximum: 360, default: 180}, description: Azimuth, degrees clockwise from north}
+        - {name: altitude, in: query, schema: {type: number, default: 0}, description: Site altitude, meters}
+        - {name: days, in: query, schema: {type: integer, minimum: 1, maximum: 7, default: 2}, description: Local calendar days including today}
+        - {name: model, in: query, schema: {$ref: "#/components/schemas/Model"}}
+        - {name: tz, in: query, schema: {type: string, default: UTC, examples: [Europe/Warsaw]}, description: IANA time zone for times and daily totals}
+        - {name: losses, in: query, schema: {type: number, minimum: 0, exclusiveMaximum: 100}, description: Total system losses, %. Default is the PVWatts breakdown (14.08 %)}
+        - {name: dcac, in: query, schema: {type: number, exclusiveMinimum: 0, default: 1.1}, description: DC/AC ratio, sets the inverter rating}
+        - {name: solarpos, in: query, schema: {type: string, enum: [spa, noaa], default: spa}}
+        - {name: instant, in: query, schema: {type: boolean, default: false}, description: Use instantaneous instead of hourly-mean irradiance}
+      responses:
+        "200": {$ref: "#/components/responses/Forecast"}
+        "400": {$ref: "#/components/responses/Problem"}
+        "502": {$ref: "#/components/responses/Problem"}
+        "503": {$ref: "#/components/responses/Problem"}
+        "504": {$ref: "#/components/responses/Problem"}
+    post:
+      summary: Forecast for any system, including multiple orientations
+      operationId: postForecast
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/ForecastRequest"}
+            example:
+              name: Warehouse roof
+              lat: 50.0647
+              lon: 19.945
+              arrays:
+                - {name: east, kwp: 24, tilt: 12, azimuth: 90}
+                - {name: west, kwp: 24, tilt: 12, azimuth: 270}
+              inverter: {dc_ac_ratio: 1.2}
+              days: 3
+              tz: Europe/Warsaw
+      responses:
+        "200": {$ref: "#/components/responses/Forecast"}
+        "400": {$ref: "#/components/responses/Problem"}
+        "413": {$ref: "#/components/responses/Problem"}
+        "502": {$ref: "#/components/responses/Problem"}
+        "503": {$ref: "#/components/responses/Problem"}
+        "504": {$ref: "#/components/responses/Problem"}
+  /healthz:
+    get:
+      summary: Liveness probe
+      responses:
+        "200":
+          description: The process is serving requests.
+          content:
+            application/json:
+              schema: {type: object, properties: {status: {type: string, const: ok}}}
+  /version:
+    get:
+      summary: Build version
+      responses:
+        "200":
+          description: Version string.
+          content:
+            application/json:
+              schema: {type: object, properties: {version: {type: string}}}
+components:
+  schemas:
+    Model:
+      type: string
+      enum: [perez, haydavies, isotropic]
+      default: perez
+      description: Sky diffuse transposition model
+    Array:
+      type: object
+      required: [kwp]
+      additionalProperties: false
+      properties:
+        name: {type: string}
+        kwp: {type: number, exclusiveMinimum: 0}
+        tilt: {type: number, minimum: 0, maximum: 90}
+        azimuth: {type: number, minimum: 0, maximum: 360}
+        gamma_pdc: {type: number, minimum: -0.02, maximum: 0, description: "Temperature coefficient, 1/°C (default −0.004)"}
+        thermal:
+          type: string
+          enum: [faiman, sapm_open_rack_glass_glass, sapm_close_mount_glass_glass, sapm_open_rack_glass_polymer, sapm_insulated_back_glass_polymer]
+        iam: {type: string, enum: [physical, ashrae, none]}
+    Losses:
+      type: object
+      additionalProperties: false
+      description: PVWatts loss categories, %
+      properties:
+        soiling: {type: number}
+        shading: {type: number}
+        snow: {type: number}
+        mismatch: {type: number}
+        wiring: {type: number}
+        connections: {type: number}
+        lid: {type: number}
+        nameplate: {type: number}
+        age: {type: number}
+        availability: {type: number}
+        other: {type: number}
+    ForecastRequest:
+      type: object
+      required: [lat, lon, arrays]
+      additionalProperties: false
+      properties:
+        name: {type: string}
+        lat: {type: number, minimum: -90, maximum: 90}
+        lon: {type: number, minimum: -180, maximum: 180}
+        altitude_m: {type: number}
+        albedo: {type: number, minimum: 0, maximum: 1}
+        model: {$ref: "#/components/schemas/Model"}
+        arrays: {type: array, minItems: 1, items: {$ref: "#/components/schemas/Array"}}
+        inverter:
+          type: object
+          additionalProperties: false
+          description: Set ac_kw or dc_ac_ratio (default ratio 1.1)
+          properties:
+            ac_kw: {type: number, exclusiveMinimum: 0}
+            dc_ac_ratio: {type: number, exclusiveMinimum: 0}
+            eta_nom: {type: number, exclusiveMinimum: 0, maximum: 1}
+        losses: {$ref: "#/components/schemas/Losses"}
+        losses_pct: {type: number, minimum: 0, exclusiveMaximum: 100}
+        days: {type: integer, minimum: 1, maximum: 7, default: 2}
+        tz: {type: string, default: UTC}
+        solarpos: {type: string, enum: [spa, noaa], default: spa}
+        instant: {type: boolean, default: false}
+    Forecast:
+      type: object
+      properties:
+        system: {type: string}
+        kwp: {type: number}
+        source: {type: string, examples: [open-meteo]}
+        label: {type: string, enum: [interval-end, interval-start, instant]}
+        interval: {type: string, examples: [1h0m0s]}
+        model: {$ref: "#/components/schemas/Model"}
+        time_zone: {type: string}
+        points:
+          type: array
+          items:
+            type: object
+            properties:
+              time: {type: string, format: date-time}
+              poa_wm2: {type: number}
+              cell_temp_c: {type: number}
+              dc_kw: {type: number}
+              ac_kw: {type: number}
+              clipped: {type: boolean}
+        daily:
+          type: array
+          items:
+            type: object
+            properties:
+              date: {type: string, format: date}
+              kwh: {type: number}
+        total_kwh: {type: number}
+        peak_ac_kw: {type: number}
+    Problem:
+      type: object
+      description: RFC 9457 problem details
+      properties:
+        type: {type: string}
+        title: {type: string}
+        status: {type: integer}
+        detail: {type: string}
+        errors: {type: array, items: {type: string}, description: One message per invalid field}
+        request_id: {type: string}
+  responses:
+    Forecast:
+      description: Hourly forecast and daily totals.
+      headers:
+        X-Request-ID: {schema: {type: string}}
+      content:
+        application/json:
+          schema: {$ref: "#/components/schemas/Forecast"}
+    Problem:
+      description: Error.
+      headers:
+        X-Request-ID: {schema: {type: string}}
+        Retry-After: {schema: {type: integer}, description: Seconds, on 503}
+      content:
+        application/problem+json:
+          schema: {$ref: "#/components/schemas/Problem"}

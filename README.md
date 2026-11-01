@@ -17,7 +17,7 @@ to within 1e-6 or better**, model by model and end to end. The library has
 **no dependencies outside the Go standard library**, does not allocate per
 time step, and computes a year of hourly data in about 60 ms.
 
-- [Install](#install) · [Command line](#command-line) · [Library](#library)
+- [Install](#install) · [Command line](#command-line) · [HTTP API](#http-api) · [Library](#library)
 - [Physics](#physics) · [Accuracy](#accuracy) · [Timestamp convention](#timestamp-convention)
 - [Benchmarks](#benchmarks) · [Limitations](#limitations) · [Roadmap](#roadmap) · [References](#references)
 
@@ -80,6 +80,50 @@ pvforecast --config examples/system.json --format json
 
 Exit codes: 0 success, 1 runtime error (for example, the weather service is
 unreachable), 2 usage error. `pvforecast version` prints the version.
+
+## HTTP API
+
+`pvforecast-api` serves the same forecasts over HTTP, using only the standard
+library:
+
+```bash
+go run ./cmd/pvforecast-api
+```
+
+```bash
+curl 'localhost:8080/v1/forecast?lat=50.06&lon=19.94&kwp=10&tilt=35&azimuth=180&days=2&tz=Europe/Warsaw'
+```
+
+Multi-array systems are posted as JSON in the `--config` format, plus `days`,
+`tz`, `solarpos` and `instant`:
+
+```bash
+curl -X POST localhost:8080/v1/forecast -d @examples/system.json
+```
+
+| Endpoint | Purpose |
+|---|---|
+| `GET /v1/forecast` | single-array system from query parameters |
+| `POST /v1/forecast` | any system as JSON |
+| `GET /healthz`, `GET /version` | liveness and build version |
+| `GET /openapi.yaml` | [OpenAPI 3.1 description](internal/httpapi/openapi.yaml) |
+
+The response is the same JSON as `pvforecast --format json`; a test checks
+that both interfaces give identical results. Errors are RFC 9457
+`application/problem+json` and list every invalid field at once.
+
+Operational behavior (see [ADR 0007](docs/adr/0007-http-api.md)):
+
+- Weather is cached in memory (15 min by default), and concurrent identical
+  requests share one upstream call.
+- Concurrency is bounded: beyond `MAX_IN_FLIGHT` requests the server answers
+  503 with `Retry-After` instead of queuing.
+- Timeouts per request and on the server, request IDs (`X-Request-ID`),
+  structured JSON access logs, panic recovery and graceful shutdown on
+  SIGTERM.
+- Configuration through environment variables: `PORT`, `LOG_LEVEL`,
+  `LOG_FORMAT`, `CACHE_TTL`, `CACHE_SIZE`, `MAX_IN_FLIGHT`,
+  `REQUEST_TIMEOUT`, `OPENMETEO_URL`.
 
 ## Library
 
@@ -283,7 +327,7 @@ Run them with `make bench`; compare commits with
 - Bifacial irradiance (view-factor model)
 - DIRINT decomposition
 - More providers: Solcast, ECMWF open data
-- HTTP API in a container image
+- Container image and AWS Lambda deployment of the HTTP API
 - WebAssembly demo on GitHub Pages
 
 ## Contributing
